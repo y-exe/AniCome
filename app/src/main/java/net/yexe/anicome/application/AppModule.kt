@@ -14,6 +14,18 @@ val appModule = module {
     single { AdvancedSettingsRepository(get(), get(), get()) }
     single { AppLockRepository(get(), get()) }
     single { CommentVisibilityRepository(get()) }
+    single { BandaiTitleRepository() }
+    single { PrimePlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
+    single { DanimePlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
+    single { NetflixEpisodeRepository(get(), Comments::search, archives = {
+        withContext(Dispatchers.IO) {
+            (get<CommentStore>().list() + get<AutoCommentCacheRepository>().store.ownList()).distinctBy { it.sourceId }
+                .filter { "OFFICIAL" in it.sources.split(',') }
+                .map { Candidate(it.sourceId, it.sourceTitle) }
+        }
+    }) }
+    viewModel { BandaiTitleViewModel(get()) }
+    viewModel { ServiceSelectionViewModel(get(), get()) }
     single { SyncAdjustmentRepository(get()) }
     single { TrafficBudgetRepository(get(), RoomTrafficIndex(get<LibraryDatabase>().traffic()), get()) }
     single { ApiClient.create(get(), get(), get()) }

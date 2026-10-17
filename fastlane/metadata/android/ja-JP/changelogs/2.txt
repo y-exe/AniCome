@@ -1,0 +1,1 @@
+視聴アプリを取得方法別に分類し、ユーザー補助の初回案内を追加。Netflixの作品判定、dアニメ・Prime Videoの同期、横画面の描画範囲を改善。Hulu・FODを一覧から削除。32bit・universal APKを追加。

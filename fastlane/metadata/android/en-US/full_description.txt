@@ -7,6 +7,9 @@ Features:
 • Advance comment downloads, automatic cache cleanup and offline comment playback
 • NG-word filtering and a compact floating playback panel
 
+Standard playback information: Netflix, U-NEXT, ABEMA, DMM TV, TVer and NHK ONE.
+Accessibility-assisted detection: Prime Video, d Anime Store and Bandai Channel. AniCome reads titles or playback times displayed in these apps to synchronize comments. Permission is requested when selecting an app for the first time. For screen-based time detection, show the player controls after seeking to resynchronize.
+
 Notification access is used to detect playback information. Display-over-other-apps permission is required to overlay comments. Niconico login is required during setup. Requests for comments and series information are sent to third-party services.
 
 F-Droid builds receive application updates through F-Droid. Artwork and preview comments are fetched at runtime rather than bundled. A network connection is required for the initial download.

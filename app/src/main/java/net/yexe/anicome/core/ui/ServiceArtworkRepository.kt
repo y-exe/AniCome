@@ -27,13 +27,13 @@ class ServiceArtworkRepository(private val settings: SettingsRepository, private
     private val mutex = Mutex()
     suspend fun load() = mutex.withLock {
         val prefs = settings.load()
-        val saved = StreamingService.entries.mapNotNull { service ->
+        val saved = StreamingService.displayOrder.mapNotNull { service ->
             prefs.getString("serviceArtwork:${service.name}", null)?.let { service to it }
         }.toMap()
         mutable.value = saved
         val limit = Semaphore(3)
         supervisorScope {
-            StreamingService.entries.filter { it !in saved }.map { service -> async {
+            StreamingService.displayOrder.filter { it !in saved }.map { service -> async {
                 limit.withPermit {
                     try {
                         val url = serviceArtworkUrl(request("https://play.google.com/store/apps/details?id=${service.packageName}&hl=en")) ?: return@withPermit

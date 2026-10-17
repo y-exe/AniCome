@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version (for example 0.25.0)
+        description: Version (for example 0.25.1)
         required: true
         type: string
       prerelease:
         description: Publish as a prerelease
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        abi: [arm64-v8a, x86_64, fdroid-universal]
+        abi: [arm64-v8a, armeabi-v7a, x86, x86_64, universal, fdroid-universal]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -77,6 +77,8 @@ jobs:
         run: |
           if [ "$ABI" = fdroid-universal ]; then
             flags=(-Pfdroid=true)
+          elif [ "$ABI" = universal ]; then
+            flags=()
           else
             flags=(-PtargetAbi="$ABI")
           fi

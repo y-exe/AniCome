@@ -2,8 +2,10 @@ package net.yexe.anicome
 
 import android.app.*
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.IBinder
+import android.os.Build
 import android.provider.Settings
 import android.view.WindowManager
 import kotlinx.coroutines.*
@@ -42,7 +44,7 @@ open class OverlayService : Service() {
                 val params = WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                     PixelFormat.TRANSLUCENT)
-                 
+                configureBounds(params)
                 if (getKoin().get<AdvancedSettingsRepository>().state.value.secureScreen) params.flags = params.flags or WindowManager.LayoutParams.FLAG_SECURE
                 params.alpha = 1f
                 windows.addView(view, params)
@@ -51,6 +53,27 @@ open class OverlayService : Service() {
             } catch (_: Exception) { Session.message.value = "重ね合わせ表示を開始できませんでした。権限を確認してください"; stopSelf() }
         }
         return START_NOT_STICKY
+    }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        layer?.let { view ->
+            (view.layoutParams as? WindowManager.LayoutParams)?.let { params ->
+                configureBounds(params)
+                windows.updateViewLayout(view, params)
+            }
+        }
+    }
+    private fun configureBounds(params: WindowManager.LayoutParams) {
+        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        params.flags = if (landscape) params.flags or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            else params.flags and WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN.inv()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode = if (landscape) WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                else WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            params.setFitInsetsTypes(if (landscape) 0 else android.view.WindowInsets.Type.systemBars())
+        }
     }
     private fun overlayNotification(): Notification = getKoin().get<CommentNotifications>().overlay()
     override fun onDestroy() {

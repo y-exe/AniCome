@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LANGUAGES = ("en", "ko", "fr", "zh", "es", "pt")
-DATA_FILES = {"EpisodeMatcher.kt", "PlaybackMetadata.kt", "ReferenceClover.kt", "AnimeWorkIdentity.kt", "SettingSearchTerms.kt"}
+DATA_FILES = {"EpisodeMatcher.kt", "PlaybackMetadata.kt", "PrimePlaybackRepository.kt", "NetflixEpisodeRepository.kt", "DanimePlaybackRepository.kt", "ReferenceClover.kt", "AnimeWorkIdentity.kt", "SettingSearchTerms.kt"}
 DATA_LITERALS = {"日本語", "简体中文", "バンダイチャンネル", "dアニメ", "アニメ", "コメント専用動画", "SZBH方式", "振り返り上映会.xml", "一挙放送.xml", "_raw.xml", "ご注文はうさぎですか", "ゆるキャン", "ぼっち・ざ・ろっく", "ひだまりスケッチ"}
 
 

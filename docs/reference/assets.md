@@ -18,12 +18,10 @@
 - [Netflix](https://play.google.com/store/apps/details?id=com.netflix.mediaclient&hl=ja)
 - [Prime Video](https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient&hl=ja)
 - [U-NEXT](https://play.google.com/store/apps/details?id=jp.unext.mediaplayer&hl=ja)
-- [Hulu](https://play.google.com/store/apps/details?id=jp.happyon.android&hl=ja)
 - [ABEMA](https://play.google.com/store/apps/details?id=tv.abema&hl=ja)
 - [dアニメストア](https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp&hl=ja)
 - [TVer](https://play.google.com/store/apps/details?id=jp.hamitv.hamiand1&hl=ja)
 - [NHK ONE](https://play.google.com/store/apps/details?id=nhk.app.tep&hl=ja)
-- [FOD](https://play.google.com/store/apps/details?id=air.jp.co.fujitv.fodviewer&hl=ja)
 - [バンダイチャンネル](https://play.google.com/store/apps/details?id=com.bch.sp.bchmembershipapp&hl=ja)
 
 ## ニコニコのアイコン

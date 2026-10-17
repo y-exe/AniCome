@@ -84,7 +84,8 @@ class AppCoordinator(
         language.value = preferences.getString("language", "system")?.takeIf { value -> SupportedLanguages.any { it.first == value } } ?: "system"
         themeMode.value = preferences.getString("themeMode", "dark") ?: "dark"
         activeService.value = preferences.getString("activeService", StreamingService.NETFLIX.name)
-            ?.let { name -> StreamingService.entries.firstOrNull { it.name == name } } ?: StreamingService.NETFLIX
+            ?.let { name -> StreamingService.displayOrder.firstOrNull { it.name == name } } ?: StreamingService.NETFLIX
+        if (preferences.getString("activeService", null) in setOf(StreamingService.HULU.name, StreamingService.FOD.name)) settings?.putString("activeService", activeService.value.name)
         Session.opacity.value = preferences.getFloat("opacity", .75f).coerceIn(.2f, 1f)
         Session.speedScale.value = preferences.getFloat("speedScale", .7f).coerceIn(.25f, 1.5f)
         Session.displayDensity.value = 1f
@@ -95,13 +96,14 @@ class AppCoordinator(
         ready.value = true
         scope.launch { refreshLibrary() }
         scope.launch {
-            val automaticTriggers = combine(Session.playback.map { Triple(it.key, it.connected, it.advertising) to it.duration }.distinctUntilChanged(), auto, commentAmount, retry, setupCompleted) { _, enabled, _, _, completed -> enabled && completed }.combine(playbackSources?.targets ?: flowOf(emptySet<PlaybackSource>())) { enabled, _ -> enabled }
+            val automaticTriggers = combine(Session.playback.map { Triple(it.key, it.connected, it.advertising) to it.commentLookupDuration }.distinctUntilChanged(), auto, commentAmount, retry, setupCompleted) { _, enabled, _, _, completed -> enabled && completed }.combine(playbackSources?.targets ?: flowOf(emptySet<PlaybackSource>())) { enabled, _ -> enabled }
             combine(automaticTriggers, Session.manualPlayback, Session.adPause) { enabled, manual, adPause -> Triple(enabled, manual, adPause) }
                 .collectLatest { (enabled, manual, adPause) ->
                     busy.value = false
                     fetchProgress.value = FetchProgress()
                     if (manual != null) { status.value = "手動再生モード"; return@collectLatest }
                     val playback = Session.playback.value
+                    val commentDuration = playback.commentLookupDuration
                     if (adPause || playback.advertising) { status.value = "広告中。コメント表示を一時停止しています"; return@collectLatest }
                     if (Session.commentBinding.value == CommentBinding.MANUAL && Session.manualCommentKey.value == playback.key) {
                         status.value = "手動で選択したコメントを使用中"
@@ -123,7 +125,7 @@ class AppCoordinator(
                     try {
                         val amount = commentAmount.value
                         val connected = online()
-                        val cached = if (!connected && playbackSources != null) playbackSources.cached(episode, playback.duration) else if (!connected) repository.cached(episode, amount)?.let { PlaybackComments(listOf(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, true))) } else null
+                        val cached = if (!connected && playbackSources != null) playbackSources.cached(episode, commentDuration) else if (!connected) repository.cached(episode, amount)?.let { PlaybackComments(listOf(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, true))) } else null
                         val obtained = if (cached != null) cached else {
                             if (!connected) {
                                 if (withContext(Dispatchers.IO) { repository.store.readForPlayback(episode) } != null) {
@@ -138,7 +140,7 @@ class AppCoordinator(
                                 "${episode.label} を1倍で自動取得中…（高倍率にはニコニコログイン連携が必要です）"
                             } else "${episode.label} のコメントを${amount}倍で自動取得中…"
                             convenience?.selectedCandidate(episode)?.takeUnless { library.value.any { it.matchesPlaybackEpisode(episode) && it.sources.contains(',') } }?.let { remembered -> playbackSources?.manual(episode, remembered, amount) { label, current, target -> fetchProgress.value = FetchProgress(label, current, target) } }
-                                ?: playbackSources?.obtain(episode, playback.duration / 1000, playback.searchTitle, amount, Diagnostics::trace,
+                                ?: playbackSources?.obtain(episode, commentDuration / 1000, playback.searchTitle, amount, Diagnostics::trace,
                                 progress = { label, current, target -> fetchProgress.value = FetchProgress(label, current, target) }, onPartial = { update ->
                                     if (Session.playback.value.key == playback.key && !(Session.commentBinding.value == CommentBinding.MANUAL && Session.manualCommentKey.value == playback.key)) {
                                         val partial = continuePlaybackComments(retainedSlots(), update, Session.commentSyncReports.value)
@@ -154,7 +156,7 @@ class AppCoordinator(
                                         Session.commentBinding.value = CommentBinding.AUTO
                                     }
                                 })
-                                ?: repository.obtain(episode, duration = playback.duration / 1000, searchTitle = playback.searchTitle, amount = amount, trace = Diagnostics::trace,
+                                ?: repository.obtain(episode, duration = commentDuration / 1000, searchTitle = playback.searchTitle, amount = amount, trace = Diagnostics::trace,
                                     progress = { label, current, target -> fetchProgress.value = FetchProgress(label, current, target) }).let { PlaybackComments(listOf(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, it.fromArchive))) }
                         }
                         ensureActive()

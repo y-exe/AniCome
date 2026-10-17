@@ -109,6 +109,8 @@ val HomeSettings = listOf(
     val reports by Session.commentSyncReports.collectAsStateWithLifecycle()
     val sources by Session.commentSources.collectAsStateWithLifecycle()
     var manual by rememberSaveable { mutableStateOf(false) }
+    val service by app.activeService.collectAsStateWithLifecycle()
+    if (service in setOf(StreamingService.BANDAI_CHANNEL, StreamingService.PRIME_VIDEO, StreamingService.D_ANIME)) BandaiTitleSettings(service)
     ReferenceGroup {
         SwitchRow("自動取得", automatic, app::setAuto, "再生中の作品に合わせて取得")
         StudioRow(headlineContent = { AppText(if (busy) "コメントを取得中" else "${comments.size}件のコメント") }, supportingContent = { AppText(status) }, trailingContent = { StudioIconButton(app::retryCurrent, enabled = automatic && !busy) { AppIcon(Icons.Filled.Refresh, "コメントを再取得") } })

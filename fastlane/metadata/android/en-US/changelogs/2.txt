@@ -1,0 +1,1 @@
+Grouped viewing apps by detection method and added Accessibility permission guidance. Improved Netflix matching, d Anime/Prime Video synchronization and landscape clipping. Removed Hulu/FOD from the list. Added 32-bit and universal APKs.

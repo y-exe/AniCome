@@ -42,5 +42,29 @@ class SigningBlockTest(unittest.TestCase):
             validator.check_signing_block(io.BytesIO(data), len(data))
 
 
+class NativeLibraryTest(unittest.TestCase):
+    def library(self, bits, alignment):
+        data = bytearray(128)
+        data[:6] = b"\x7fELF" + bytes([2 if bits == 64 else 1, 1])
+        if bits == 64:
+            struct.pack_into("<Q", data, 32, 64)
+            struct.pack_into("<HH", data, 54, 56, 1)
+            struct.pack_into("<Q", data, 112, alignment)
+        else:
+            struct.pack_into("<I", data, 28, 64)
+            struct.pack_into("<HH", data, 42, 32, 1)
+            struct.pack_into("<I", data, 92, alignment)
+        struct.pack_into("<I", data, 64, 1)
+        return bytes(data)
+
+    def test_32bit_library_uses_its_native_header_and_alignment(self):
+        self.assertEqual((32, [4096], 4096), validator.check_elf(self.library(32, 4096), "lib/x86/test.so"))
+
+    def test_64bit_library_requires_16kb_alignment(self):
+        self.assertEqual((64, [16384], 16384), validator.check_elf(self.library(64, 16384), "lib/arm64-v8a/test.so"))
+        with self.assertRaises(AssertionError):
+            validator.check_elf(self.library(64, 4096), "lib/arm64-v8a/test.so")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -261,18 +261,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 @Composable internal fun ServiceSelectionSheet(selected: StreamingService, select: (StreamingService) -> Unit, dismiss: () -> Unit) {
     StudioSheet(onDismissRequest = dismiss) { ServiceSelectionContent(selected, select) }
 }
-@Composable internal fun ServiceSelectionContent(selected: StreamingService, select: (StreamingService) -> Unit) {
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        AppText("視聴アプリを選ぶ", style = MaterialTheme.typography.headlineSmall)
-        AppText("コメントを表示する動画アプリを選択してください。", style = MaterialTheme.typography.bodyLarge)
-        ReferenceGroup {
-            StreamingService.displayOrder.forEach { service ->
-                ListItem(headlineContent = { AppText(service.label, style = MaterialTheme.typography.titleMedium) }, leadingContent = { ServiceAppIcon(service, 40.dp) }, trailingContent = { RadioButton(service == selected, onClick = null) }, colors = ListItemDefaults.colors(containerColor = if (service == selected) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.selectable(service == selected, role = Role.RadioButton) { select(service) })
-            }
-        }
-    }
-}
-
 @Composable internal fun ServiceAppIcon(service: StreamingService, size: androidx.compose.ui.unit.Dp = 26.dp) {
     coil3.compose.AsyncImage(LocalServiceArtwork.current[service], uiText(service.label), Modifier.size(size), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
 

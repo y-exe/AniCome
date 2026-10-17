@@ -36,7 +36,7 @@ android {
         }
     }
     defaultConfig { applicationId = "net.yexe.anicome"; minSdk = 26; targetSdk = 36; versionCode = appVersion.getProperty("versionCode").toInt(); versionName = appVersion.getProperty("versionName"); testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk { abiFilters += providers.gradleProperty("targetAbi").orNull?.let { require(it in listOf("arm64-v8a", "x86_64")); listOf(it) } ?: listOf("arm64-v8a", "x86_64") }
+        ndk { abiFilters += providers.gradleProperty("targetAbi").orNull?.let { require(it in listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")); listOf(it) } ?: listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") }
     }
     buildFeatures { compose = true; buildConfig = true }
     defaultConfig { buildConfigField("boolean", "FDROID", fdroidBuild.toString()) }

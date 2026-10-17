@@ -1,0 +1,4 @@
+<resources>
+    <string name="bandai_title_accessibility_label">AniCome: title detection</string>
+    <string name="bandai_title_accessibility_description">Reads titles, episode numbers and playback times from Bandai Channel, Prime Video and d Anime Store to synchronize comments. Does not control the screen or capture screenshots.</string>
+</resources>

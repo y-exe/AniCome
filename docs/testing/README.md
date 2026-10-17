@@ -56,8 +56,10 @@ python scripts/checks/check-bundled-preview.py APKのパス
 
 ## リリース
 
-GitHub Actionsの`Release`をmainから手動実行し、バージョンとプレリリースの有無を指定します。`version.properties`を更新する署名済みコミットを作成し、arm64-v8a・x86_64のAPKとSHA256SUMSを公開します。
+GitHub Actionsの`Release`をmainから手動実行し、バージョンを指定します。通常はLatestとして公開し、必要な場合のみプレリリースを指定します。`version.properties`を更新する署名済みコミットを作成し、APKとSHA256SUMSを公開します。
+
+APKはarm64-v8a・armeabi-v7a・x86・x86_64・universalの5種類です。一般的な現行スマートフォンはarm64-v8a、種類が不明なら全ABIを含むuniversalを使用します。ABI別は`-PtargetAbi=arm64-v8a`などを指定し、universalは指定せずにビルドします。
 
 署名鍵とパスワードはリポジトリのActions Secrets（`ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`）に設定し、証明書のSHA-256はActions変数`ANDROID_CERT_SHA256`で照合します。署名鍵は変更せず引き継いでください。
 
-F-Droid向けは`-Pfdroid=true`でビルドします。GitHub経由の自己更新とAPKインストール権限を無効にし、arm64-v8a・x86_64を含むAPKを作成します。F-Droidの再ビルドには`-PunsignedRelease=true`も指定します。Actionsの`fdroid-universal`成果物を開発者署名付きの照合対象とします。
+F-Droid向けは`-Pfdroid=true`でビルドします。GitHub経由の自己更新とAPKインストール権限を無効にし、4つのABIを含むAPKを作成します。F-Droidの再ビルドには`-PunsignedRelease=true`も指定します。Actionsの`fdroid-universal`成果物を開発者署名付きの照合対象とします。

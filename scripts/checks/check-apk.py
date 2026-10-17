@@ -33,6 +33,23 @@ def check_signing_block(raw, directory_offset):
     return identifiers
 
 
+def check_elf(data, name):
+    assert data[:4] == b"\x7fELF" and data[4] in (1, 2) and data[5] == 1, name
+    bits = 64 if data[4] == 2 else 32
+    if bits == 64:
+        offset = struct.unpack_from("<Q", data, 32)[0]
+        size, count = struct.unpack_from("<HH", data, 54)
+        align_format, align_offset = "<Q", 48
+    else:
+        offset = struct.unpack_from("<I", data, 28)[0]
+        size, count = struct.unpack_from("<HH", data, 42)
+        align_format, align_offset = "<I", 28
+    required = 16384 if bits == 64 else 4096
+    alignment = [struct.unpack_from(align_format, data, offset + i * size + align_offset)[0] for i in range(count) if struct.unpack_from("<I", data, offset + i * size)[0] == 1]
+    assert alignment and all(value >= required for value in alignment), name
+    return bits, alignment, required
+
+
 def check_apk(path):
     result = {"file": str(path.resolve()), "bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
     with zipfile.ZipFile(path) as archive, path.open("rb") as raw:
@@ -57,16 +74,12 @@ def check_apk(path):
                 dex.append({"name": entry.filename, "fields": fields, "methods": methods})
             if entry.filename.startswith("lib/") and entry.filename.endswith(".so"):
                 data = archive.read(entry)
-                assert data[:5] == b"\x7fELF\x02", entry.filename
-                offset = struct.unpack_from("<Q", data, 32)[0]
-                size, count = struct.unpack_from("<HH", data, 54)
-                alignment = [struct.unpack_from("<Q", data, offset + i * size + 48)[0] for i in range(count) if struct.unpack_from("<I", data, offset + i * size)[0] == 1]
-                assert alignment and all(value >= 16384 for value in alignment), entry.filename
+                bits, alignment, required = check_elf(data, entry.filename)
                 assert entry.compress_type == zipfile.ZIP_STORED, entry.filename
                 raw.seek(entry.header_offset + 26)
                 name_size, extra_size = struct.unpack("<HH", raw.read(4))
-                assert (entry.header_offset + 30 + name_size + extra_size) % 16384 == 0, entry.filename
-                libraries.append({"name": entry.filename, "loadAlignment": alignment})
+                assert (entry.header_offset + 30 + name_size + extra_size) % required == 0, entry.filename
+                libraries.append({"name": entry.filename, "bits": bits, "loadAlignment": alignment})
         assert dex, "Missing DEX"
         result.update(zipCrc="ok", manifest="binary XML", dex=dex, nativeLibraries=libraries)
     return result

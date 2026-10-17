@@ -2,6 +2,14 @@ package net.yexe.anicome
 
  
 object PlaybackMetadata {
+    fun withNotification(session: List<Pair<String, String?>>, notification: List<Pair<String, String?>>): List<Pair<String, String?>> =
+        if (resolve(session).first.isBlank()) notification else session
+
+    fun searchTitle(fields: List<Pair<String, String?>>): String =
+        listOf("TITLE", "DISPLAY_TITLE", "NOTIFICATION_TITLE").firstNotNullOfOrNull { label ->
+            fields.firstOrNull { it.first == label }?.second?.trim()?.takeIf(String::isNotBlank)
+        } ?: resolve(fields).first
+
     fun isAdvertisement(fields: List<Pair<String, String?>>): Boolean {
         val text = fields.mapNotNull { it.second }.joinToString(" ").lowercase()
         return Regex("(?:^|\\s)(?:ad|ad break|advertisement|cm)(?:\\s|$)|広告|コマーシャル|スポンサー", RegexOption.IGNORE_CASE)

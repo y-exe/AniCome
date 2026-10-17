@@ -1,0 +1,10 @@
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
+    android:packageNames="com.bch.sp.bchmembershipapp,com.amazon.avod.thirdpartyclient,com.nttdocomo.android.danimeapp"
+    android:notificationTimeout="300"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="false"
+    android:isAccessibilityTool="false"
+    android:description="@string/bandai_title_accessibility_description" />
