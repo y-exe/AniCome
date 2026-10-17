@@ -1,0 +1,52 @@
+图片来源
+
+作品图片与服务标志的权利归各权利人所有。作品图片来自 Kitsu、AniList 和 Jikan。已保存的各集使用对应 Niconico 视频的缩略图。
+
+视频服务
+
+服务图标在运行时从 Google Play 获取并在设备上缓存，不包含在 APK 中。
+
+DMM TV
+https://play.google.com/store/apps/details?id=com.dmm.premium
+
+Netflix
+https://play.google.com/store/apps/details?id=com.netflix.mediaclient
+
+Prime Video
+https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient
+
+U-NEXT
+https://play.google.com/store/apps/details?id=jp.unext.mediaplayer
+
+Hulu
+https://play.google.com/store/apps/details?id=jp.happyon.android
+
+ABEMA
+https://play.google.com/store/apps/details?id=tv.abema
+
+d Anime
+https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp
+
+TVer
+https://play.google.com/store/apps/details?id=jp.hamitv.hamiand1
+
+NHK ONE
+https://play.google.com/store/apps/details?id=nhk.app.tep
+
+FOD
+https://play.google.com/store/apps/details?id=air.jp.co.fujitv.fodviewer
+
+Bandai Channel
+https://play.google.com/store/apps/details?id=com.bch.sp.bchmembershipapp
+
+
+预览评论：https://www.nicovideo.jp/watch/so23335421
+128至228秒区间的评论由设备直接下载，不包含在APK中。相关权利属于各权利人，不包含视频本身。应用的GPL-3.0许可证不会改变投稿评论的权利或许可。
+
+
+Setup welcome artwork (downloaded at runtime, not bundled):
+https://www.gochiusa.com/bloom/core_sys/images/main/home/main_img2_8.jpg
+https://bocchi.rocks/tv/assets/img/page/top/announce2nd/ph_mv.jpg
+https://yurucamp.jp/third/assets/img/top/visual_sp.jpg
+https://www.tbs.co.jp/anime/machikado/img/ogp3.png
+Artwork belongs to the respective rights holders. The GPL license for the application code does not apply to this artwork.

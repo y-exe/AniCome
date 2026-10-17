@@ -1,0 +1,52 @@
+Fontes das imagens
+
+As imagens e os logótipos pertencem aos respetivos proprietários. As imagens das séries são obtidas de Kitsu, AniList e Jikan. Cada episódio guardado utiliza a miniatura do vídeo do Niconico.
+
+Serviços de vídeo
+
+Os ícones são obtidos do Google Play e armazenados em cache durante o uso; não estão incluídos no APK.
+
+DMM TV
+https://play.google.com/store/apps/details?id=com.dmm.premium
+
+Netflix
+https://play.google.com/store/apps/details?id=com.netflix.mediaclient
+
+Prime Video
+https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient
+
+U-NEXT
+https://play.google.com/store/apps/details?id=jp.unext.mediaplayer
+
+Hulu
+https://play.google.com/store/apps/details?id=jp.happyon.android
+
+ABEMA
+https://play.google.com/store/apps/details?id=tv.abema
+
+d Anime
+https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp
+
+TVer
+https://play.google.com/store/apps/details?id=jp.hamitv.hamiand1
+
+NHK ONE
+https://play.google.com/store/apps/details?id=nhk.app.tep
+
+FOD
+https://play.google.com/store/apps/details?id=air.jp.co.fujitv.fodviewer
+
+Bandai Channel
+https://play.google.com/store/apps/details?id=com.bch.sp.bchmembershipapp
+
+
+Comentários de teste: https://www.nicovideo.jp/watch/so23335421
+Os comentários entre os segundos 128 e 228 são baixados diretamente no dispositivo e não estão incluídos no APK. Os direitos pertencem aos respetivos proprietários. O vídeo não está incluído. A licença GPL-3.0 da aplicação não altera os direitos nem as licenças dos comentários publicados.
+
+
+Setup welcome artwork (downloaded at runtime, not bundled):
+https://www.gochiusa.com/bloom/core_sys/images/main/home/main_img2_8.jpg
+https://bocchi.rocks/tv/assets/img/page/top/announce2nd/ph_mv.jpg
+https://yurucamp.jp/third/assets/img/top/visual_sp.jpg
+https://www.tbs.co.jp/anime/machikado/img/ogp3.png
+Artwork belongs to the respective rights holders. The GPL license for the application code does not apply to this artwork.

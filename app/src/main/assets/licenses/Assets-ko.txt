@@ -1,0 +1,52 @@
+이미지 출처
+
+작품 이미지와 서비스 로고의 권리는 각 권리자에게 있습니다. 작품 이미지는 Kitsu, AniList 및 Jikan에서 가져옵니다. 저장된 개별 회차에는 니코니코 영상 썸네일을 사용합니다.
+
+영상 서비스
+
+서비스 아이콘은 실행 시 Google Play에서 가져와 기기에 캐시하며 APK에 포함하지 않습니다.
+
+DMM TV
+https://play.google.com/store/apps/details?id=com.dmm.premium
+
+Netflix
+https://play.google.com/store/apps/details?id=com.netflix.mediaclient
+
+Prime Video
+https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient
+
+U-NEXT
+https://play.google.com/store/apps/details?id=jp.unext.mediaplayer
+
+Hulu
+https://play.google.com/store/apps/details?id=jp.happyon.android
+
+ABEMA
+https://play.google.com/store/apps/details?id=tv.abema
+
+d Anime
+https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp
+
+TVer
+https://play.google.com/store/apps/details?id=jp.hamitv.hamiand1
+
+NHK ONE
+https://play.google.com/store/apps/details?id=nhk.app.tep
+
+FOD
+https://play.google.com/store/apps/details?id=air.jp.co.fujitv.fodviewer
+
+Bandai Channel
+https://play.google.com/store/apps/details?id=com.bch.sp.bchmembershipapp
+
+
+미리보기 댓글: https://www.nicovideo.jp/watch/so23335421
+128~228초 구간의 댓글은 기기에서 직접 다운로드하며 APK에 포함되지 않습니다. 권리는 각 권리자에게 있습니다. 영상 자체는 포함하지 않습니다. 앱의 GPL-3.0 라이선스는 댓글의 권리나 라이선스를 변경하지 않습니다.
+
+
+Setup welcome artwork (downloaded at runtime, not bundled):
+https://www.gochiusa.com/bloom/core_sys/images/main/home/main_img2_8.jpg
+https://bocchi.rocks/tv/assets/img/page/top/announce2nd/ph_mv.jpg
+https://yurucamp.jp/third/assets/img/top/visual_sp.jpg
+https://www.tbs.co.jp/anime/machikado/img/ogp3.png
+Artwork belongs to the respective rights holders. The GPL license for the application code does not apply to this artwork.

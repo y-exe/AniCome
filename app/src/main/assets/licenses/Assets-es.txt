@@ -1,0 +1,52 @@
+Fuentes de las imágenes
+
+Las imágenes y los logotipos pertenecen a sus respectivos propietarios. Las imágenes de las series se obtienen de Kitsu, AniList y Jikan. Cada episodio guardado usa la miniatura del vídeo de Niconico.
+
+Servicios de vídeo
+
+Los iconos se obtienen de Google Play y se guardan en caché durante la ejecución; no se incluyen en el APK.
+
+DMM TV
+https://play.google.com/store/apps/details?id=com.dmm.premium
+
+Netflix
+https://play.google.com/store/apps/details?id=com.netflix.mediaclient
+
+Prime Video
+https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient
+
+U-NEXT
+https://play.google.com/store/apps/details?id=jp.unext.mediaplayer
+
+Hulu
+https://play.google.com/store/apps/details?id=jp.happyon.android
+
+ABEMA
+https://play.google.com/store/apps/details?id=tv.abema
+
+d Anime
+https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp
+
+TVer
+https://play.google.com/store/apps/details?id=jp.hamitv.hamiand1
+
+NHK ONE
+https://play.google.com/store/apps/details?id=nhk.app.tep
+
+FOD
+https://play.google.com/store/apps/details?id=air.jp.co.fujitv.fodviewer
+
+Bandai Channel
+https://play.google.com/store/apps/details?id=com.bch.sp.bchmembershipapp
+
+
+Comentarios de prueba: https://www.nicovideo.jp/watch/so23335421
+Los comentarios entre los segundos 128 y 228 se descargan directamente al dispositivo y no se incluyen en el APK. Los derechos pertenecen a sus respectivos propietarios. El vídeo no está incluido. La licencia GPL-3.0 de la aplicación no modifica los derechos ni las licencias de los comentarios publicados.
+
+
+Setup welcome artwork (downloaded at runtime, not bundled):
+https://www.gochiusa.com/bloom/core_sys/images/main/home/main_img2_8.jpg
+https://bocchi.rocks/tv/assets/img/page/top/announce2nd/ph_mv.jpg
+https://yurucamp.jp/third/assets/img/top/visual_sp.jpg
+https://www.tbs.co.jp/anime/machikado/img/ogp3.png
+Artwork belongs to the respective rights holders. The GPL license for the application code does not apply to this artwork.

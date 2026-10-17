@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}</style></head>
+<body><div id="player"></div><script>
+let player, playerError = 0, playerReady = false;
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('player', {
+    videoId: '4uyUPa4V_8o', host: 'https://www.youtube-nocookie.com',
+    playerVars: {playsinline:1,fs:0,origin:'https://yexe.net'},
+    events: {onReady:()=>playerReady=true,onError:e=>playerError=e.data}
+  });
+}
+setTimeout(()=>{if(!playerReady&&!playerError)playerError=-1},25000);
+function previewStatus() {
+  if (!player || !player.getCurrentTime) return JSON.stringify({position:0,duration:90,playing:false,error:playerError,speed:1});
+  return JSON.stringify({position:player.getCurrentTime(),duration:player.getDuration()||90,playing:player.getPlayerState()===1,error:playerError,speed:player.getPlaybackRate?player.getPlaybackRate():1});
+}
+</script><script src="https://www.youtube.com/iframe_api"></script></body></html>

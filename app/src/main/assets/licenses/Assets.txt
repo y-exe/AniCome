@@ -1,0 +1,42 @@
+画像の出典
+
+作品画像とサービスロゴの権利は各権利者に帰属します。作品全体の画像はKitsu・AniList・Jikan、保存した各話の画像はニコニコの動画サムネイルを使用します。
+
+配信サービス
+
+配信サービスのロゴは各提供元のGoogle Play掲載ページから実行時に取得し、端末へキャッシュします。APKには同梱しません。
+
+- DMM TV
+https://play.google.com/store/apps/details?id=com.dmm.premium&hl=ja
+- Netflix
+https://play.google.com/store/apps/details?id=com.netflix.mediaclient&hl=ja
+- Prime Video
+https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient&hl=ja
+- U-NEXT
+https://play.google.com/store/apps/details?id=jp.unext.mediaplayer&hl=ja
+- Hulu
+https://play.google.com/store/apps/details?id=jp.happyon.android&hl=ja
+- ABEMA
+https://play.google.com/store/apps/details?id=tv.abema&hl=ja
+- dアニメストア
+https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp&hl=ja
+- TVer
+https://play.google.com/store/apps/details?id=jp.hamitv.hamiand1&hl=ja
+- NHK ONE
+https://play.google.com/store/apps/details?id=nhk.app.tep&hl=ja
+- FOD
+https://play.google.com/store/apps/details?id=air.jp.co.fujitv.fodviewer&hl=ja
+- バンダイチャンネル
+https://play.google.com/store/apps/details?id=com.bch.sp.bchmembershipapp&hl=ja
+
+
+試し表示コメント: https://www.nicovideo.jp/watch/so23335421
+動画内128〜228秒の投稿コメントは利用者の端末で直接取得し、保存します。APKには同梱しません。権利は各権利者に帰属します。動画本体は同梱していません。アプリのGPL-3.0は投稿コメントのライセンスを変更しません。
+
+
+Setup welcome artwork (downloaded at runtime, not bundled):
+https://www.gochiusa.com/bloom/core_sys/images/main/home/main_img2_8.jpg
+https://bocchi.rocks/tv/assets/img/page/top/announce2nd/ph_mv.jpg
+https://yurucamp.jp/third/assets/img/top/visual_sp.jpg
+https://www.tbs.co.jp/anime/machikado/img/ogp3.png
+Artwork belongs to the respective rights holders. The GPL license for the application code does not apply to this artwork.

@@ -1,0 +1,49 @@
+# Local toolchains and generated outputs
+/.tools/
+/artifacts/
+.gradle/
+.kotlin/
+**/build/
+/app/src/test/snapshots/
+*.apk
+*.apks
+*.aab
+*.hprof
+*.log
+
+# Machine-specific configuration
+local.properties
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Credentials and signing keys
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+
+# Test and script dependencies / caches
+node_modules/
+.npm/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+coverage/
+.nyc_output/
+playwright-report/
+
+# Operating system and editor temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~

@@ -1,0 +1,52 @@
+Sources des images
+
+Les images et logos appartiennent à leurs détenteurs respectifs. Les illustrations des séries proviennent de Kitsu, AniList et Jikan. Chaque épisode enregistré utilise la miniature de sa vidéo Niconico.
+
+Services vidéo
+
+Les icônes sont récupérées sur Google Play et mises en cache sur l’appareil ; elles ne sont pas incluses dans l’APK.
+
+DMM TV
+https://play.google.com/store/apps/details?id=com.dmm.premium
+
+Netflix
+https://play.google.com/store/apps/details?id=com.netflix.mediaclient
+
+Prime Video
+https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient
+
+U-NEXT
+https://play.google.com/store/apps/details?id=jp.unext.mediaplayer
+
+Hulu
+https://play.google.com/store/apps/details?id=jp.happyon.android
+
+ABEMA
+https://play.google.com/store/apps/details?id=tv.abema
+
+d Anime
+https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp
+
+TVer
+https://play.google.com/store/apps/details?id=jp.hamitv.hamiand1
+
+NHK ONE
+https://play.google.com/store/apps/details?id=nhk.app.tep
+
+FOD
+https://play.google.com/store/apps/details?id=air.jp.co.fujitv.fodviewer
+
+Bandai Channel
+https://play.google.com/store/apps/details?id=com.bch.sp.bchmembershipapp
+
+
+Commentaires de démonstration : https://www.nicovideo.jp/watch/so23335421
+Les commentaires entre 128 et 228 secondes sont téléchargés directement sur l’appareil et ne sont pas inclus dans l’APK. Les droits appartiennent à leurs titulaires respectifs. La vidéo n’est pas incluse. La GPL-3.0 de l’application ne modifie pas les droits des commentaires.
+
+
+Setup welcome artwork (downloaded at runtime, not bundled):
+https://www.gochiusa.com/bloom/core_sys/images/main/home/main_img2_8.jpg
+https://bocchi.rocks/tv/assets/img/page/top/announce2nd/ph_mv.jpg
+https://yurucamp.jp/third/assets/img/top/visual_sp.jpg
+https://www.tbs.co.jp/anime/machikado/img/ogp3.png
+Artwork belongs to the respective rights holders. The GPL license for the application code does not apply to this artwork.

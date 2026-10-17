@@ -1,0 +1,36 @@
+{
+  "Titles": {
+    "5364": {
+      "TID": "5364",
+      "Title": "まちカドまぞく",
+      "ShortTitle": "",
+      "TitleYomi": "まちかどまぞく",
+      "TitleEN": "",
+      "Cat": "10",
+      "FirstCh": "TBS",
+      "FirstYear": "2019",
+      "FirstMonth": "7",
+      "FirstEndYear": "2019",
+      "FirstEndMonth": "9",
+      "TitleFlag": "0",
+      "Comment": "",
+      "Search": 1
+    },
+    "6283": {
+      "TID": "6283",
+      "Title": "まちカドまぞく 2丁目",
+      "ShortTitle": "",
+      "TitleYomi": "まちかどまぞくにちょうめ",
+      "TitleEN": "",
+      "Cat": "10",
+      "FirstCh": "TBS",
+      "FirstYear": "2022",
+      "FirstMonth": "4",
+      "FirstEndYear": "2022",
+      "FirstEndMonth": "6",
+      "TitleFlag": "0",
+      "Comment": "",
+      "Search": 1
+    }
+  }
+}

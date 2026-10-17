@@ -1,0 +1,14 @@
+AniCome overlays Niconico comments on Android video apps and synchronizes them with playback.
+
+Features:
+• Automatic series and episode matching
+• Official Niconico, d Anime, live archive and Jikkyo comment sources
+• Per-app comment position, size, opacity and speed
+• Advance comment downloads, automatic cache cleanup and offline comment playback
+• NG-word filtering and a compact floating playback panel
+
+Notification access is used to detect playback information. Display-over-other-apps permission is required to overlay comments. Niconico login is required during setup. Requests for comments and series information are sent to third-party services.
+
+F-Droid builds receive application updates through F-Droid. Artwork and preview comments are fetched at runtime rather than bundled. A network connection is required for the initial download.
+
+AniCome does not play or download the streaming services' videos. It is an independent application, not an official product of Niconico or any supported streaming service.

@@ -1,0 +1,68 @@
+{
+  "Titles": {
+    "4612": {
+      "TID": "4612",
+      "Title": "ようこそ実力至上主義の教室へ",
+      "ShortTitle": "",
+      "TitleYomi": "ようこそじつりょくしじょうしゅぎのきょうしつへ",
+      "TitleEN": "",
+      "Cat": "10",
+      "FirstCh": "AT-X",
+      "FirstYear": "2017",
+      "FirstMonth": "7",
+      "FirstEndYear": "2017",
+      "FirstEndMonth": "9",
+      "TitleFlag": "0",
+      "Comment": "",
+      "Search": 1
+    },
+    "6369": {
+      "TID": "6369",
+      "Title": "ようこそ実力至上主義の教室へ 2nd Season",
+      "ShortTitle": "ようこそ実力至上主義の教室へ(2)",
+      "TitleYomi": "ようこそじつりょくしじょうしゅぎのきょうしつへせかんどしーずん",
+      "TitleEN": "Classroom of the Elite 2nd Season",
+      "Cat": "10",
+      "FirstCh": "AT-X",
+      "FirstYear": "2022",
+      "FirstMonth": "7",
+      "FirstEndYear": "2022",
+      "FirstEndMonth": "9",
+      "TitleFlag": "0",
+      "Comment": "",
+      "Search": 1
+    },
+    "6888": {
+      "TID": "6888",
+      "Title": "ようこそ実力至上主義の教室へ 3rd Season",
+      "ShortTitle": "ようこそ実力至上主義の教室へ(3)",
+      "TitleYomi": "ようこそじつりょくしじょうしゅぎのきょうしつへさーどしーずん",
+      "TitleEN": "Classroom of the Elite 3rd Season",
+      "Cat": "10",
+      "FirstCh": "AT-X",
+      "FirstYear": "2024",
+      "FirstMonth": "1",
+      "FirstEndYear": "2024",
+      "FirstEndMonth": "3",
+      "TitleFlag": "0",
+      "Comment": "",
+      "Search": 1
+    },
+    "7753": {
+      "TID": "7753",
+      "Title": "ようこそ実力至上主義の教室へ 4th Season 2年生編1学期",
+      "ShortTitle": "ようこそ実力至上主義の教室へ(4)",
+      "TitleYomi": "ようこそじつりょくしじょうしゅぎのきょうしつへふぉーすしーずんにねんせいへんいちがっき",
+      "TitleEN": "Classroom of the Elite 4th Season: Second Year, First Semester",
+      "Cat": "10",
+      "FirstCh": "AT-X",
+      "FirstYear": "2026",
+      "FirstMonth": "4",
+      "FirstEndYear": "2026",
+      "FirstEndMonth": "6",
+      "TitleFlag": "0",
+      "Comment": "",
+      "Search": 1
+    }
+  }
+}

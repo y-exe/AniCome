@@ -1,0 +1,39 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <queries>
+        <package android:name="com.dmm.premium" /><package android:name="com.netflix.mediaclient" />
+        <package android:name="com.amazon.avod.thirdpartyclient" /><package android:name="jp.unext.mediaplayer" />
+        <package android:name="jp.happyon.android" /><package android:name="tv.abema" />
+        <package android:name="com.nttdocomo.android.danimeapp" /><package android:name="jp.hamitv.hamiand1" />
+        <package android:name="nhk.app.tep" /><package android:name="air.jp.co.fujitv.fodviewer" />
+        <package android:name="com.bch.sp.bchmembershipapp" />
+    </queries>
+    <application android:name=".AniComeApp" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
+        </provider>
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name=".CommentPreviewActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".NiconicoLoginActivity" android:exported="false" />
+        <activity android:name=".NiconicoFullscreenLoginActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <service android:name=".PlaybackListener" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true" android:label="AniCome">
+            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
+        </service>
+        <service android:name=".OverlayService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started visible comment overlay synchronized to another app's media session; stopped by the user from the app or notification." />
+        </service>
+        <service android:name=".FloatingPanelService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started collapsible comment progress and playback controls displayed over another app." />
+        </service>
+    </application>
+</manifest>
+

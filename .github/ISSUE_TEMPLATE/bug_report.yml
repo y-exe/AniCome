@@ -1,0 +1,33 @@
+name: 不具合報告
+description: 動作の問題を報告
+title: "[Bug] "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: AniComeのバージョン
+      placeholder: 0.25.0
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 端末・Androidバージョン
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順と起きたこと
+      description: コメントの問題なら、作品・期・話数・取得元・取得量・再生時間も記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した動作
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 補足・画像・ログ
+      description: Cookie・パスワードなどの認証情報は記載しないでください。
