@@ -17,6 +17,7 @@ val appModule = module {
     single { BandaiTitleRepository() }
     single { PrimePlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
     single { DanimePlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
+    single { HuluPlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
     single { NetflixEpisodeRepository(get(), Comments::search, archives = {
         withContext(Dispatchers.IO) {
             (get<CommentStore>().list() + get<AutoCommentCacheRepository>().store.ownList()).distinctBy { it.sourceId }

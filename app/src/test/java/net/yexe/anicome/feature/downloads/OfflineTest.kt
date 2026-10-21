@@ -147,7 +147,8 @@ class OfflineTest {
     }
     @Test fun linkedNiconicoSessionAllowsHigherAmounts() {
         assertEquals(10, Comments.availableAmount(10, linked = true))
-        assertEquals(20, Comments.availableAmount(99, linked = true))
+        assertEquals(99, Comments.availableAmount(99, linked = true))
+        assertEquals(Int.MAX_VALUE, Comments.availableAmount(Int.MAX_VALUE, linked = true))
         assertEquals(1, Comments.availableAmount(10, linked = false))
     }
 }

@@ -1,4 +1,4 @@
 <resources>
     <string name="bandai_title_accessibility_label">AniCome : détection des titres</string>
-    <string name="bandai_title_accessibility_description">Lit les titres, épisodes et positions de lecture sur Bandai Channel, Prime Video et d Anime Store pour synchroniser les commentaires. Ne contrôle pas l’écran et ne fait pas de captures.</string>
+    <string name="bandai_title_accessibility_description">Lit les titres, épisodes et positions de lecture sur Bandai Channel, Prime Video, d Anime Store et Hulu pour synchroniser les commentaires. Ne contrôle pas l’écran et ne fait pas de captures.</string>
 </resources>

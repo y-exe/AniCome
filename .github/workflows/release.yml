@@ -1,5 +1,5 @@
 name: Release
-run-name: Release v${{ inputs.version }}
+run-name: v${{ inputs.version }}
 on:
   workflow_dispatch:
     inputs:
@@ -129,4 +129,10 @@ jobs:
           sha256sum ./*.apk > SHA256SUMS
           flags=()
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
-          gh release create "v$VERSION" ./*.apk SHA256SUMS --target "$RELEASE_SHA" --title "AniCome v$VERSION" --generate-notes "${flags[@]}"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" ./*.apk SHA256SUMS --clobber
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/v$VERSION" -f sha="$RELEASE_SHA" -F force=true
+            gh release edit "v$VERSION" --target "$RELEASE_SHA" --title "AniCome v$VERSION" --prerelease="$PRERELEASE"
+          else
+            gh release create "v$VERSION" ./*.apk SHA256SUMS --target "$RELEASE_SHA" --title "AniCome v$VERSION" --generate-notes "${flags[@]}"
+          fi

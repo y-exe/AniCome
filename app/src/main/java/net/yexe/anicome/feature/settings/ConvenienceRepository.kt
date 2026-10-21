@@ -223,7 +223,7 @@ class ConvenienceRepository(private val context: Context, private val settings: 
     fun markWatched(episodes: List<Episode>, value: Boolean) { episodes.forEach { settings.putLong("watched:${CommentStore.fileKey(it.key)}", if (value) System.currentTimeMillis() else 0) } }
     private fun profile() = JSONObject().put("size", Session.size.value).put("speed", Session.speedScale.value).put("opacity", Session.opacity.value)
         .put("fps", Session.fps.value).put("font", Session.fontStyle.value).put("color", Session.colorStyle.value).put("position", Session.overlayPosition.value)
-        .put("amount", app.commentAmount.value).put("renderMode", options.value.renderMode).toString()
+        .put("amount", app.commentAmount.value).put("countMode", app.commentCountMode.value).put("countLimit", app.commentCountLimit.value).put("renderMode", options.value.renderMode).toString()
     fun savePreset() = settings.putString("customPreset", profile())
     fun saveServiceProfile() = settings.putString("serviceProfile:${app.activeService.value.name}", profile())
     fun preset(name: String) {
@@ -239,6 +239,8 @@ class ConvenienceRepository(private val context: Context, private val settings: 
         app.setCommentSize(j.optDouble("size", 17.0).toFloat()); app.setSpeedScale(j.optDouble("speed", .5).toFloat()); app.setOpacity(j.optDouble("opacity", 1.0).toFloat())
         app.setFps(j.optInt("fps", 60)); app.setFontStyle(j.optString("font", "default")); app.setColorStyle(j.optString("color", "original"))
         if (j.has("amount")) app.setCommentAmount(j.optInt("amount", 1))
+        if (j.has("countMode")) app.setCommentCountMode(j.optBoolean("countMode"))
+        if (j.has("countLimit")) app.setCommentCountLimit(j.optInt("countLimit", 5000))
         if (j.has("renderMode")) renderMode(j.optString("renderMode", "balanced").takeIf { it in setOf("quality", "balanced", "battery") } ?: "balanced")
         settings.putString("overlayPosition", j.optString("position", "center").takeIf { it in setOf("top", "center", "bottom", "custom") } ?: "center")
     }
@@ -336,13 +338,13 @@ class ConvenienceRepository(private val context: Context, private val settings: 
         app.reloadPortableSettings(); app.refreshLibrary(); "バックアップを読み込みました。既存のコメントは保持しました"
     }
 }
-internal fun portableKey(key: String) = key in setOf("overlayEnabled", "commentSize", "opacity", "speedScale", "fps", "colorStyle", "fontStyle", "ngWords", "commentAmount", "wifiOnly", "batchLimit", "language", "themeMode", "storageLimitMb", "autoCacheHours", "autoCacheLimitMb", "trafficLimitMb", "trafficPeriod", "overlayPosition", "overlayCustomY", "reducedMotion", "autoCommentSync", "syncOnlyConfirmed", "nextEpisodes", "prefetchWifi", "prefetchCharging", "rememberSelection", "serviceProfiles", "renderMode", "homeSections", "notificationActions", "customPreset", "saveCommentSources", "panelCollapsed", "panelCompact", "panelSnap", "panelActions", "panelTitle", "panelCount", "panelTiming", "panelOpacity", "panelX", "panelY", "panelLandscapeX", "panelLandscapeY", "panelLandscapeCollapsed", "notificationProgress", "notificationCount", "notificationPlayback", "notificationCompletion") || key.startsWith("protectedWork:") || key.startsWith("workChannel:") || key.startsWith("prefetchDisabled:") || key.startsWith("episodeLabel:") || key.startsWith("libraryTitle:") || key.startsWith("seriesLabel:") || key.startsWith("selectedWork:") || key.startsWith("selectedVideo:") || key.startsWith("serviceProfile:") || key.startsWith("workNg:") || key.startsWith("episodeNg:") || key.startsWith("watched:") || PlaybackSource.entries.any { it.settingKey == key }
+internal fun portableKey(key: String) = key in setOf("overlayEnabled", "commentSize", "opacity", "speedScale", "fps", "colorStyle", "fontStyle", "ngWords", "commentAmount", "commentCountMode", "commentCountLimit", "wifiOnly", "batchLimit", "language", "themeMode", "storageLimitMb", "autoCacheHours", "autoCacheLimitMb", "trafficLimitMb", "trafficPeriod", "overlayPosition", "overlayCustomY", "reducedMotion", "autoCommentSync", "syncOnlyConfirmed", "nextEpisodes", "prefetchWifi", "prefetchCharging", "rememberSelection", "serviceProfiles", "renderMode", "homeSections", "notificationActions", "customPreset", "saveCommentSources", "panelCollapsed", "panelCompact", "panelSnap", "panelActions", "panelTitle", "panelCount", "panelTiming", "panelOpacity", "panelX", "panelY", "panelLandscapeX", "panelLandscapeY", "panelLandscapeCollapsed", "notificationProgress", "notificationCount", "notificationPlayback", "notificationCompletion") || key.startsWith("protectedWork:") || key.startsWith("workChannel:") || key.startsWith("prefetchDisabled:") || key.startsWith("episodeLabel:") || key.startsWith("libraryTitle:") || key.startsWith("seriesLabel:") || key.startsWith("selectedWork:") || key.startsWith("selectedVideo:") || key.startsWith("serviceProfile:") || key.startsWith("workNg:") || key.startsWith("episodeNg:") || key.startsWith("watched:") || PlaybackSource.entries.any { it.settingKey == key }
 
 internal fun validatePortableSetting(key: String, item: JSONObject) {
     require(portableKey(key) && key.length <= 400)
     val expected = when {
         key in setOf("commentSize", "opacity", "speedScale", "overlayCustomY", "panelOpacity", "panelX", "panelY", "panelLandscapeX", "panelLandscapeY") -> "float"
-        key in setOf("fps", "commentAmount", "batchLimit", "nextEpisodes") || key.startsWith("episodeLabel:") -> "int"
+        key in setOf("fps", "commentAmount", "commentCountLimit", "batchLimit", "nextEpisodes") || key.startsWith("episodeLabel:") -> "int"
         key in setOf("storageLimitMb", "autoCacheHours", "autoCacheLimitMb", "trafficLimitMb") || key.startsWith("workChannel:") || key.startsWith("watched:") -> "long"
         key in setOf("colorStyle", "fontStyle", "ngWords", "language", "themeMode", "trafficPeriod", "panelActions", "overlayPosition", "renderMode", "homeSections", "notificationActions", "customPreset", "saveCommentSources") || listOf("selectedWork:", "selectedVideo:", "serviceProfile:", "workNg:", "episodeNg:", "libraryTitle:", "seriesLabel:").any(key::startsWith) -> "string"
         else -> "boolean"

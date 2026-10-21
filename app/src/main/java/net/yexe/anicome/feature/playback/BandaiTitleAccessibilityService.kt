@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -11,14 +12,22 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 
 class BandaiTitleAccessibilityService : AccessibilityService() {
     private val titles: BandaiTitleRepository by inject()
     private val prime: PrimePlaybackRepository by inject()
     private val danime: DanimePlaybackRepository by inject()
+    private val hulu: HuluPlaybackRepository by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sampling: Job? = null
+    private var huluSampling: Job? = null
+    private var huluReadMs = 0L
+
+    override fun dump(fd: java.io.FileDescriptor, writer: java.io.PrintWriter, args: Array<out String>?) {
+        writer.println("huluSampling=${huluSampling?.isActive} stage=${HuluAccessibilityReader.stage} lastReadMs=$huluReadMs")
+    }
 
     override fun onServiceConnected() {
         titles.setEnabled(true)
@@ -32,15 +41,34 @@ class BandaiTitleAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.packageName?.toString() in setOf(StreamingService.BANDAI_CHANNEL.packageName, StreamingService.PRIME_VIDEO.packageName, StreamingService.D_ANIME.packageName)) readPlayback()
+        if (event?.packageName?.toString() in StreamingService.accessibilityServices.map { it.packageName }) readPlayback()
     }
 
     private fun readPlayback() {
+        if (aniComeApp.activeService.value == StreamingService.HULU) {
+            if (huluSampling?.isActive != true) huluSampling = scope.launch { readHulu() }
+        } else { huluSampling?.cancel(); hulu.clear() }
         if (aniComeApp.activeService.value == StreamingService.D_ANIME) readDanime() else danime.clear()
         if (aniComeApp.activeService.value == StreamingService.PRIME_VIDEO) readPrime() else {
             prime.clear()
             readTitle()
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private suspend fun readHulu() {
+        val started = android.os.SystemClock.elapsedRealtime()
+        try {
+            val result = withContext(Dispatchers.Default) {
+                val roots = windows.mapNotNull { it.root }.toMutableList()
+                if (roots.isEmpty()) rootInActiveWindow?.let(roots::add)
+                try { roots.firstNotNullOfOrNull { HuluAccessibilityReader.read(it) } }
+                finally { roots.forEach { it.recycle() } }
+            }
+            if (aniComeApp.activeService.value == StreamingService.HULU) result?.let(hulu::observe) ?: hulu.absent()
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { if (aniComeApp.activeService.value == StreamingService.HULU) hulu.absent() }
+        finally { huluReadMs = android.os.SystemClock.elapsedRealtime() - started }
     }
 
     @Suppress("DEPRECATION")
@@ -106,6 +134,7 @@ class BandaiTitleAccessibilityService : AccessibilityService() {
         titles.setEnabled(false)
         prime.clear()
         danime.clear()
+        hulu.clear()
         scope.cancel()
         super.onDestroy()
     }

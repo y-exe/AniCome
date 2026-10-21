@@ -1,4 +1,4 @@
 <resources>
     <string name="bandai_title_accessibility_label">AniCome: 작품명 감지</string>
-    <string name="bandai_title_accessibility_description">반다이 채널, Prime Video, d아니메에서 작품명, 회차, 재생 시간을 읽어 댓글을 동기화합니다. 화면을 조작하거나 캡처하지 않습니다.</string>
+    <string name="bandai_title_accessibility_description">반다이 채널, Prime Video, d아니메, Hulu에서 작품명, 회차, 재생 시간을 읽어 댓글을 동기화합니다. 화면을 조작하거나 캡처하지 않습니다.</string>
 </resources>

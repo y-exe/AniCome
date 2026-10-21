@@ -119,7 +119,8 @@ class ServiceSelectionViewModel(private val accessibility: BandaiTitleRepository
         listOf(
             StreamingService.PRIME_VIDEO to "作品名・話数・再生時刻",
             StreamingService.D_ANIME to "再生時刻",
-            StreamingService.BANDAI_CHANNEL to "作品名・話数"
+            StreamingService.BANDAI_CHANNEL to "作品名・話数",
+            StreamingService.HULU to "作品名・話数・再生時刻"
         ).forEach { (service, detail) ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ServiceAppIcon(service, 36.dp)
@@ -131,5 +132,6 @@ class ServiceSelectionViewModel(private val accessibility: BandaiTitleRepository
         }
         AppText("必要な情報が見えるよう、再生画面の操作表示を出してください。")
         AppText("操作表示が隠れている間は時刻を推定。シーク後は操作表示で再同期します。")
+        AppText("Huluは操作表示を隠した状態でも再生時刻を取得します。")
     }, confirmButton = { StudioButton(dismiss) { AppText("閉じる") } })
 }

@@ -27,7 +27,8 @@ class CommentRepository(
     private val detailedLoad: (suspend (String, Int, (Int, Int) -> Unit) -> List<Comment>)? = null,
     private val snapshotLoader: suspend (String, JSONObject?, Int, String, String) -> List<Candidate> = { query, filter, limit, sort, targets -> Comments.searchSnapshot(query, filter, limit, sort, targets) },
     private val reuse: CommentStore? = null,
-    private val onSearch: suspend (String, Int, Episode?) -> Unit = { _, _, _ -> }
+    private val onSearch: suspend (String, Int, Episode?) -> Unit = { _, _, _ -> },
+    private val countLoad: suspend (String, Int, Int, (Int, Int) -> Unit) -> List<Comment> = Comments::loadToCount
 ) {
     private val permits = kotlinx.coroutines.sync.Semaphore(3)
     private val episodeLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
@@ -36,7 +37,7 @@ class CommentRepository(
     fun clearMissing() { missing.clear(); searchCache.entries.removeIf { it.value.second.isEmpty() } }
     private val seriesCache = java.util.concurrent.ConcurrentHashMap<String, List<Candidate>>()
 
-    fun forPlayback(cache: CommentStore) = CommentRepository(cache, search, load, detailedLoad, snapshotLoader, onSearch = onSearch)
+    fun forPlayback(cache: CommentStore) = CommentRepository(cache, search, load, detailedLoad, snapshotLoader, onSearch = onSearch, countLoad = countLoad)
     private fun archivedSource(id: String) = listOfNotNull(store.readSource(id), reuse?.readSource(id)).maxWithOrNull(compareBy<SavedComments> { it.info.amount }.thenBy { it.comments.size })
     private fun promoteJson(text: String, episode: Episode, selected: Set<PlaybackSource>) {
         val root = store.validateImport(text)
@@ -51,7 +52,7 @@ class CommentRepository(
                 root.put("thumbnailUrl", metadata?.thumbnailUrl.orEmpty()).put("ownerName", metadata?.ownerName.orEmpty()).put("ownerUrl", metadata?.ownerUrl.orEmpty())
             }
             root.put("sources", org.json.JSONArray(chosen)).put("sourceId", primary.getString("id")).put("sourceTitle", primary.getString("title"))
-                .put("amount", primary.optInt("amount", 1)).put("durationMs", primary.optLong("durationMs"))
+                .put("amount", primary.optInt("amount", 1)).put("countLimit", primary.optInt("countLimit", 0)).put("durationMs", primary.optLong("durationMs"))
         }
         root.put("series", episode.series).put("episode", episode.number).put("requestedSources", org.json.JSONArray(selected.map { it.name }))
         store.importJson(root.toString(), upgrade = true)
@@ -60,10 +61,10 @@ class CommentRepository(
         val saved = reuse?.readOwn(sourceEpisode) ?: return@withContext
         reuse.exportJson(saved.info.episode)?.let { promoteJson(it, episode, selected) }
     }
-    suspend fun cachedSource(id: String, amount: Int = 1) = withContext(Dispatchers.IO) { archivedSource(id)?.takeIf { it.info.amount >= amount } }
-    suspend fun cached(episode: Episode, amount: Int = 1) = withContext(Dispatchers.IO) {
+    suspend fun cachedSource(id: String, amount: Int = 1, maxComments: Int = 0) = withContext(Dispatchers.IO) { archivedSource(id)?.takeIf { it.satisfiesCommentTarget(amount, maxComments) }?.limited(maxComments) }
+    suspend fun cached(episode: Episode, amount: Int = 1, maxComments: Int = 0) = withContext(Dispatchers.IO) {
         listOfNotNull(store.read(episode), reuse?.read(episode)).filterNot { it.isIncompleteSource(it.info.sourceId) }
-            .maxWithOrNull(compareBy<SavedComments> { it.info.amount }.thenBy { it.comments.size })?.takeIf { it.info.amount >= Comments.availableAmount(amount) }?.copy(fromArchive = true)
+            .filter { it.satisfiesCommentTarget(amount, maxComments) }.maxWithOrNull(compareBy<SavedComments> { it.info.amount }.thenBy { it.comments.size })?.limited(maxComments)?.copy(fromArchive = true)
     }
 
     suspend fun obtain(
@@ -78,6 +79,7 @@ class CommentRepository(
         requiredChannelId: Long? = null,
         trace: (String) -> Unit = {},
         forceSearch: Boolean = false,
+        maxComments: Int = 0,
         progress: (label: String, current: Int, target: Int) -> Unit = { _, _, _ -> }
     ): SavedComments = episodeLocks.getOrPut(episode.key) { Mutex() }.withLock { permits.withPermit {
         val requestedAmount = amount.coerceIn(1, Comments.MAX_AMOUNT)
@@ -85,7 +87,7 @@ class CommentRepository(
         if (requestedAmount > availableAmount) trace("ニコニコ未ログインのため履歴取得は1倍です（2倍以上にはログイン連携が必要です）")
         val lookup = sourceEpisode ?: episode
         val accept: (Candidate) -> Boolean = { (requiredChannelId == null || it.channelId == requiredChannelId) && (!strictMatch || savedEpisodeMatches(lookup, it, episodeTitle)) }
-        if (source == null) cached(episode, availableAmount)?.takeIf { it.info.sources.split(",").contains("OFFICIAL") }?.takeIf { accept(Candidate(it.info.sourceId, it.info.sourceTitle)) }?.let { progress("保存済みコメントを使用", it.comments.size, it.comments.size); return@withLock withContext(Dispatchers.IO) {
+        if (source == null) cached(episode, availableAmount, maxComments)?.takeIf { it.info.sources.split(",").contains("OFFICIAL") }?.takeIf { accept(Candidate(it.info.sourceId, it.info.sourceTitle)) }?.let { progress("保存済みコメントを使用", it.comments.size, it.comments.size); return@withLock withContext(Dispatchers.IO) {
             if (reuse != null) {
                 promoteCached(episode, setOf(PlaybackSource.OFFICIAL), it.info.episode)
                 if (store.read(episode) == null) store.exportJson(it.info.episode)?.let { json -> promoteJson(json, episode, setOf(PlaybackSource.OFFICIAL)) }
@@ -102,14 +104,14 @@ class CommentRepository(
             val candidates = try { search(query).filter { it.isDownloadOfficial() && accept(it) }.sortedByDescending { it.commentCount }.take(3) }
                 catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (limit: TrafficLimitReached) { throw limit }
                 catch (_: Exception) { emptyList() }
-            if (candidates.isNotEmpty()) return@withLock fetchAndSave(episode, candidates, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null)
+            if (candidates.isNotEmpty()) return@withLock fetchAndSave(episode, candidates, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null, maxComments)
         }
         if (source == null && strictMatch && animeWorkIdentity(lookup.series).let { it.season > 1 || it.cour > 1 }) {
             progress("動画を検索中", 0, 0)
             val candidates = try { search("${animeSearchStem(lookup.series)} ${lookup.number}").filter { it.isDownloadOfficial() && accept(it) }.sortedByDescending { it.commentCount }.take(3) }
                 catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (limit: TrafficLimitReached) { throw limit }
                 catch (_: Exception) { emptyList() }
-            if (candidates.isNotEmpty()) return@withLock fetchAndSave(episode, candidates, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null)
+            if (candidates.isNotEmpty()) return@withLock fetchAndSave(episode, candidates, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null, maxComments)
         }
 
         val seriesKey = EpisodeMatcher.normalize(lookup.series)
@@ -120,7 +122,7 @@ class CommentRepository(
             val cachedMatches = EpisodeMatcher.matches(lookup, cachedList.filter { it.isDownloadOfficial() && accept(it) }, duration)
             if (cachedMatches.isNotEmpty()) {
                 trace("シリーズキャッシュから候補を再利用: ${cachedMatches.size}件")
-                return@withLock fetchAndSave(episode, cachedMatches, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null)
+                return@withLock fetchAndSave(episode, cachedMatches, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null, maxComments)
             }
         }
 
@@ -133,7 +135,7 @@ class CommentRepository(
                 seriesCache.compute(seriesKey) { _, previous -> (previous.orEmpty() + titleResults).distinctBy { it.id } }
                 val titleMatches = EpisodeMatcher.matches(lookup, titleResults.filter { it.isDownloadOfficial() && accept(it) }, duration)
                 if (titleMatches.isNotEmpty()) {
-                    return@withLock fetchAndSave(episode, titleMatches, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null)
+                    return@withLock fetchAndSave(episode, titleMatches, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null, maxComments)
                 }
             }
         }
@@ -164,9 +166,8 @@ class CommentRepository(
             throw OfficialMatchUnavailable("${lookup.label}：全7段階の検索を試行しましたが一致する動画が見つかりませんでした。作品名や話数をご確認ください")
         }
 
-        fetchAndSave(episode, matches, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null)
-    }
-    }
+        fetchAndSave(episode, matches, availableAmount, trace, progress, accept, strictMatch || requiredChannelId != null, maxComments)
+    } }.limited(maxComments)
 
     private suspend fun fetchAndSave(
         episode: Episode,
@@ -175,24 +176,25 @@ class CommentRepository(
         trace: (String) -> Unit,
         progress: (label: String, current: Int, target: Int) -> Unit,
         accept: (Candidate) -> Boolean = { true },
-        storeForEpisode: Boolean = false
+        storeForEpisode: Boolean = false,
+        maxComments: Int = 0
     ): SavedComments {
         var lastError: Exception? = null
         for (candidate in candidates) {
             try {
-                withContext(Dispatchers.IO) { archivedSource(candidate.id) }?.let { archived ->
+                withContext(Dispatchers.IO) { archivedSource(candidate.id)?.takeIf { it.satisfiesCommentTarget(availableAmount, maxComments) }?.limited(maxComments) }?.let { archived ->
                     trace("保存済みの同じ動画から再利用: ${archived.info.sourceId}")
                     progress("保存済みコメントを使用", archived.comments.size, archived.comments.size)
                     if (storeForEpisode && archived.info.episode.key != episode.key) return withContext(Dispatchers.IO) {
                         store.save(episode, candidate.copy(thumbnailUrl = candidate.thumbnailUrl.ifBlank { archived.info.thumbnailUrl },
-                            ownerName = candidate.ownerName.ifBlank { archived.info.ownerName }, ownerUrl = candidate.ownerUrl.ifBlank { archived.info.ownerUrl }), archived.comments, archived.info.amount).copy(fromArchive = true)
+                            ownerName = candidate.ownerName.ifBlank { archived.info.ownerName }, ownerUrl = candidate.ownerUrl.ifBlank { archived.info.ownerUrl }), archived.comments, archived.info.amount, countLimit = maxComments.takeIf { it > 0 } ?: archived.countLimit).copy(fromArchive = true)
                     }
                     return archived.copy(fromArchive = true)
                 }
                 require(candidate.isDownloadOfficial()) { "保存できるのはニコニコ公式のコメントだけです" }
                 trace("コメント取得: ${candidate.id} ${candidate.title}")
-                progress("コメントを取得中", 0, availableAmount * 1000)
-                val comments = detailedLoad?.invoke(candidate.id, availableAmount) { current, target ->
+                progress("コメントを取得中", 0, if (maxComments > 0) maxComments else commentTarget(availableAmount))
+                val comments = if (maxComments > 0) countLoad(candidate.id, availableAmount, maxComments) { current, target -> progress("コメントを取得中", current, target) } else detailedLoad?.invoke(candidate.id, availableAmount) { current, target ->
                     progress("コメントを取得中", current, target)
                 } ?: load(candidate.id, availableAmount).also { progress("コメントを取得中", it.size, it.size) }
                 trace("コメント取得成功: ${comments.size}件 / ${availableAmount}倍 / ${candidate.id}")
@@ -200,7 +202,7 @@ class CommentRepository(
                 val confirmed = Comments.knownSource(candidate.id)?.let { metadata -> candidate.copy(id = metadata.id, title = metadata.title, duration = metadata.duration.takeIf { it > 0 } ?: candidate.duration, thumbnailUrl = metadata.thumbnailUrl.ifBlank { candidate.thumbnailUrl }, ownerName = metadata.ownerName, ownerUrl = metadata.ownerUrl, channelId = metadata.channelId ?: candidate.channelId, userId = metadata.userId ?: candidate.userId) } ?: candidate
                 require(confirmed.isDownloadOfficial()) { "保存できるのはニコニコ公式のコメントだけです" }
                 if (!accept(confirmed)) throw MatchUnavailable("作品名・話数・各話タイトルを確認できないため保存を中止しました")
-                return withContext(Dispatchers.IO) { store.save(episode, confirmed, comments, availableAmount) }
+                return withContext(Dispatchers.IO) { store.save(episode, confirmed, comments, availableAmount, countLimit = maxComments) }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (limit: TrafficLimitReached) { throw limit }
             catch (e: Exception) { lastError = e; trace("${candidate.id}: ${e.message?.take(200)}") }
         }
@@ -419,20 +421,23 @@ class CommentRepository(
     suspend fun replaceOfficial(item: SavedEpisode, candidate: Candidate, expected: Episode = item.episode, subtitle: String = ""): SavedComments = episodeLocks.getOrPut(item.episode.key) { Mutex() }.withLock { permits.withPermit {
         require(candidate.isDownloadOfficial()) { "保存できるのはニコニコ公式のコメントだけです" }
         if (!savedEpisodeMatches(expected, candidate, subtitle)) throw MatchUnavailable("作品名・話数・各話タイトルを確認できないため保存を中止しました")
+        val maximum = withContext(Dispatchers.IO) { store.readSource(item.sourceId)?.countLimit ?: 0 }
         val saved = fetchAndSave(item.episode, listOf(candidate), Comments.availableAmount(item.amount), {}, { _, _, _ -> },
-            { savedEpisodeMatches(expected, it, subtitle) }, true)
+            { savedEpisodeMatches(expected, it, subtitle) }, true, maximum)
         withContext(Dispatchers.IO) {
-            if (store.readOwn(item.episode)?.info?.sourceId != saved.info.sourceId) store.save(item.episode, candidate, saved.comments, saved.info.amount)
+            if (store.readOwn(item.episode)?.info?.sourceId != saved.info.sourceId) store.save(item.episode, candidate, saved.comments, saved.info.amount, countLimit = saved.countLimit)
             else checkNotNull(store.readOwn(item.episode))
         }
     } }
 
     suspend fun delete(episode: Episode) = episodeLocks.getOrPut(episode.key) { Mutex() }.withLock { withContext(Dispatchers.IO) { store.delete(episode) } }
-    suspend fun refresh(item: SavedEpisode): SavedComments = episodeLocks.getOrPut(item.episode.key) { Mutex() }.withLock { permits.withPermit {
+    suspend fun refresh(item: SavedEpisode, maxComments: Int? = null): SavedComments = episodeLocks.getOrPut(item.episode.key) { Mutex() }.withLock { permits.withPermit {
         val source = Comments.sourceMetadata(item.sourceId)
         require(source.isDownloadOfficial())
-        val comments = detailedLoad?.invoke(item.sourceId, Comments.availableAmount(item.amount)) { _, _ -> } ?: load(item.sourceId, Comments.availableAmount(item.amount))
-        withContext(Dispatchers.IO) { store.save(item.episode, source, comments, Comments.availableAmount(item.amount)) }
+        val maximum = maxComments ?: withContext(Dispatchers.IO) { store.readOwn(item.episode)?.countLimit ?: 0 }
+        val comments = if (maximum > 0) countLoad(item.sourceId, Comments.availableAmount(item.amount), maximum) { _, _ -> }
+            else detailedLoad?.invoke(item.sourceId, Comments.availableAmount(item.amount)) { _, _ -> } ?: load(item.sourceId, Comments.availableAmount(item.amount))
+        withContext(Dispatchers.IO) { store.save(item.episode, source, comments, Comments.availableAmount(item.amount), countLimit = maximum) }
     } }
     suspend fun relabel(from: Episode, to: Episode) = episodeLocks.getOrPut(from.key) { Mutex() }.withLock { withContext(Dispatchers.IO) { store.relabel(from, to) } }
 }

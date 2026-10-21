@@ -32,7 +32,7 @@ enum class StreamingService(val label: String, val packageName: String, val doma
     val requiresAccessibility: Boolean get() = this in accessibilityServices
     companion object {
         val standardServices = listOf(NETFLIX, U_NEXT, ABEMA, DMM_TV, TVER, NHK_PLUS)
-        val accessibilityServices = listOf(PRIME_VIDEO, D_ANIME, BANDAI_CHANNEL)
+        val accessibilityServices = listOf(PRIME_VIDEO, HULU, D_ANIME, BANDAI_CHANNEL)
         val displayOrder = standardServices + accessibilityServices
     }
 }
@@ -112,8 +112,11 @@ open class PlaybackListener : NotificationListenerService() {
     override fun dump(fd: java.io.FileDescriptor, writer: java.io.PrintWriter, args: Array<out String>?) {
         val time = SystemClock.elapsedRealtime()
         writer.println("service=${aniComeApp.activeService.value}")
+        writer.println("ready=${aniComeApp.ready.value} setup=${aniComeApp.setupCompleted.value} auto=${aniComeApp.auto.value} busy=${aniComeApp.busy.value} status=${aniComeApp.status.value}")
+        writer.println("fetch=${aniComeApp.fetchProgress.value} trace=${Diagnostics.log.value}")
         writer.println("prime=${prime.playback.value}")
         writer.println("danime=${danime.anchor.value}")
+        writer.println("hulu=${hulu.playback.value}")
         writer.println("playback=${Session.playback.value}")
         writer.println("positionNow=${Session.playback.value.positionAt(time)} now=$time offset=${Session.offset.value} manual=${Session.manualPlayback.value}")
         writer.println("rendererAt=${Diagnostics.renderedAt.value} renderer=${Diagnostics.renderer.value}")
@@ -126,10 +129,12 @@ open class PlaybackListener : NotificationListenerService() {
     private var primeJob: Job? = null
     private var netflixJob: Job? = null
     private var danimeJob: Job? = null
+    private var huluJob: Job? = null
     private val bandaiTitles: BandaiTitleRepository by inject()
     private val prime: PrimePlaybackRepository by inject()
     private val netflix: NetflixEpisodeRepository by inject()
     private val danime: DanimePlaybackRepository by inject()
+    private val hulu: HuluPlaybackRepository by inject()
     private var controller: MediaController? = null
     private var primeSessionToken: MediaSession.Token? = null
     private var danimeSessionToken: MediaSession.Token? = null
@@ -166,6 +171,10 @@ open class PlaybackListener : NotificationListenerService() {
             danimeJob?.cancel()
             danimeJob = aniComeApp.scope.launch {
                 danime.anchor.collect { if (aniComeApp.activeService.value == StreamingService.D_ANIME) publish() }
+            }
+            huluJob?.cancel()
+            huluJob = aniComeApp.scope.launch {
+                hulu.playback.collect { if (aniComeApp.activeService.value == StreamingService.HULU) publish() }
             }
             serviceJob?.cancel()
             serviceJob = aniComeApp.scope.launch {
@@ -261,6 +270,7 @@ open class PlaybackListener : NotificationListenerService() {
             val screen = prime.playback.value.takeIf { aniComeApp.activeService.value == StreamingService.PRIME_VIDEO }
             val netflixMatch = netflix.match.value?.takeIf { it.identity == netflixIdentity }
             Session.playback.value = when {
+                aniComeApp.activeService.value == StreamingService.HULU -> hulu.playback.value ?: Playback()
                 aniComeApp.activeService.value == StreamingService.D_ANIME -> danime.resolve(native)
                 netflixIdentity != null && netflixMatch != null -> native.copy(
                     title = netflixMatch.episode.series,
@@ -272,6 +282,9 @@ open class PlaybackListener : NotificationListenerService() {
                 netflixIdentity != null -> native.copy(title = "", subtitle = "", searchTitle = netflixIdentity.title)
                 screen != null && native.position < 0 -> screen
                 else -> native
+            }
+            hulu.playback.value?.takeIf { aniComeApp.activeService.value == StreamingService.HULU }?.let {
+                Diagnostics.metadata.value = "TITLE: ${it.title}\nEPISODE: ${it.subtitle}\nSCREEN / position=${it.position}ms / duration=${it.duration}ms / playing=${it.playing}"
             }
             if (screen != null && native.position < 0) Diagnostics.metadata.value = "TITLE: ${screen.title}\nEPISODE: ${screen.subtitle}\nSCREEN / position=${screen.position}ms / duration=${screen.duration}ms / playing=${screen.playing}"
         } catch (e: Exception) {
@@ -293,6 +306,7 @@ open class PlaybackListener : NotificationListenerService() {
         danimeJob?.cancel()
         danimeJob = null
         danime.clear()
+        huluJob?.cancel(); huluJob = null; hulu.clear()
         netflix.select(null)
         bandaiTitles.mediaChanged("")
         manager.removeOnActiveSessionsChangedListener(listener)

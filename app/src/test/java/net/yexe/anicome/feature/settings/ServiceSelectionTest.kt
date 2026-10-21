@@ -7,12 +7,13 @@ import org.junit.Test
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ServiceSelectionTest {
-    @Test fun supportedServicesAreGroupedWithoutHuluOrFod() {
-        assertFalse(StreamingService.HULU in StreamingService.displayOrder)
+    @Test fun huluUsesAccessibilityAndFodRemainsUnavailable() {
+        assertTrue(StreamingService.HULU in StreamingService.accessibilityServices)
         assertFalse(StreamingService.FOD in StreamingService.displayOrder)
         assertTrue(StreamingService.standardServices.none { it.requiresAccessibility })
         assertTrue(StreamingService.accessibilityServices.all { it.requiresAccessibility })
-        assertEquals(9, StreamingService.displayOrder.distinct().size)
+        assertEquals(10, StreamingService.displayOrder.distinct().size)
+        assertEquals(StreamingService.HULU, StreamingService.displayOrder[StreamingService.displayOrder.indexOf(StreamingService.PRIME_VIDEO) + 1])
     }
 
     @Test fun permissionAndFirstUseExplanationAreRequiredBeforeSelection() = runTest {
@@ -37,6 +38,11 @@ class ServiceSelectionTest {
         assertFalse(model.choose(StreamingService.PRIME_VIDEO))
         assertNull(model.confirm())
         assertFalse(model.choose(StreamingService.HULU))
+        assertEquals(StreamingService.HULU, model.request.value?.service)
+        permission.setEnabled(true)
+        assertEquals(StreamingService.HULU, model.confirm())
+        runCurrent()
+        assertTrue(model.choose(StreamingService.HULU))
         assertFalse(model.choose(StreamingService.FOD))
     }
 }

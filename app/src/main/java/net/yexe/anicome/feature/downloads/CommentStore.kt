@@ -8,13 +8,11 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 data class SavedEpisode(val episode: Episode, val sourceId: String, val sourceTitle: String, val savedAt: Long, val count: Int, val bytes: Long, val amount: Int = 1, val thumbnailUrl: String = "", val ownerName: String = "", val ownerUrl: String = "", val sources: String = "OFFICIAL")
-data class SavedComments(val info: SavedEpisode, val comments: List<Comment>, val fromArchive: Boolean = false, val slots: List<PlaybackCommentSlot> = emptyList(), val durationMs: Long = 0, val incompleteIds: Set<String> = emptySet(), val recoveryMetadata: String = "")
+data class SavedComments(val info: SavedEpisode, val comments: List<Comment>, val fromArchive: Boolean = false, val slots: List<PlaybackCommentSlot> = emptyList(), val durationMs: Long = 0, val incompleteIds: Set<String> = emptySet(), val recoveryMetadata: String = "", val countLimit: Int = 0)
 
 internal fun SavedComments.isIncompleteSource(id: String) = incompleteIds.any { (niconicoVideoId(it) ?: it) == (niconicoVideoId(id) ?: id) }
 
-internal fun mergeRecoveryComments(previous: List<Comment>, fresh: List<Comment>): List<Comment> {
-    return mergeCommentUpdates(previous, fresh).also { require(it.size <= 200000) { "1話あたりの保存データが大きすぎます" } }
-}
+internal fun mergeRecoveryComments(previous: List<Comment>, fresh: List<Comment>) = mergeCommentUpdates(previous, fresh)
 
  
 class CommentStore(private val directory: File, private val maxBytes: Long = Long.MAX_VALUE, private val capacity: () -> Long = { maxBytes }, private val index: SavedEpisodeIndex? = null, private val fallback: CommentStore? = null, private val expiresAfter: () -> Long = { Long.MAX_VALUE }, private val clock: () -> Long = System::currentTimeMillis, private val automaticLimit: () -> Long = { 0L }, private val onSaved: (SavedEpisode?, SavedEpisode) -> Unit = { _, _ -> }) {
@@ -29,7 +27,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
         val own = readOwn(episode)
         val manual = fallback?.readForPlayback(episode) ?: return own
         if (own == null) return manual
-        fun slots(saved: SavedComments) = saved.slots.ifEmpty { listOf(PlaybackCommentSlot(saved.info.sourceId, saved.info.sourceTitle, PlaybackSource.OFFICIAL, saved.comments, true, saved.durationMs, amount = saved.info.amount)) }
+        fun slots(saved: SavedComments) = saved.slots.ifEmpty { listOf(PlaybackCommentSlot(saved.info.sourceId, saved.info.sourceTitle, PlaybackSource.OFFICIAL, saved.comments, true, saved.durationMs, amount = saved.info.amount, countLimit = saved.countLimit)) }
         val chosen = (slots(manual).map { it to manual.isIncompleteSource(it.id) } + slots(own).map { it to own.isIncompleteSource(it.id) })
             .groupBy { it.first.id }.values.map { values ->
                 val chosen = values.maxWith(compareBy<Pair<PlaybackCommentSlot, Boolean>> { !it.second }.thenBy { it.first.amount }.thenBy { it.first.comments.size })
@@ -57,7 +55,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
             else parseComments(root.getJSONArray("comments"))
         require(comments.isNotEmpty() && comments.all { it.at >= 0 && it.body.isNotBlank() })
         val recovery = JSONObject().apply { listOf("repairPendingSources", "repairPendingIds", "repairOriginalId", "repairOriginalTitle", "repairAmount").forEach { key -> if (root.has(key)) put(key, root.get(key)) } }
-        SavedComments(SavedEpisode(episode, root.getString("sourceId"), root.getString("sourceTitle"), root.getLong("savedAt"), if (slots.isEmpty()) comments.size else slots.sumOf { it.comments.size }, file.length(), root.optInt("amount", 1).coerceIn(1, 20), root.optString("thumbnailUrl"), root.optString("ownerName"), root.optString("ownerUrl"), slots.map { it.source.name }.distinct().joinToString(",").ifBlank { "OFFICIAL" }), comments.sortedBy { it.at }, slots = slots, durationMs = root.optLong("durationMs"), incompleteIds = root.optJSONArray("repairPendingIds")?.let { pending -> (0 until pending.length()).mapNotNull { i -> pending.optJSONObject(i)?.optString("id") }.toSet() }.orEmpty(), recoveryMetadata = if (recovery.length() == 0) "" else recovery.toString())
+        SavedComments(SavedEpisode(episode, root.getString("sourceId"), root.getString("sourceTitle"), root.getLong("savedAt"), if (slots.isEmpty()) comments.size else slots.sumOf { it.comments.size }, file.length(), root.optInt("amount", 1).coerceAtLeast(1), root.optString("thumbnailUrl"), root.optString("ownerName"), root.optString("ownerUrl"), slots.map { it.source.name }.distinct().joinToString(",").ifBlank { "OFFICIAL" }), comments.sortedBy { it.at }, slots = slots, durationMs = root.optLong("durationMs"), incompleteIds = root.optJSONArray("repairPendingIds")?.let { pending -> (0 until pending.length()).mapNotNull { i -> pending.optJSONObject(i)?.optString("id") }.toSet() }.orEmpty(), recoveryMetadata = if (recovery.length() == 0) "" else recovery.toString(), countLimit = root.optInt("countLimit", 0).coerceAtLeast(0))
     }.getOrNull()
     @Synchronized fun ownList(): List<SavedEpisode> {
         val entries = index?.all() ?: filesList()
@@ -112,7 +110,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
             }
             previous.copy(comments = (previous.comments + additions).sortedBy { it.at }, amount = maxOf(previous.amount, slot.amount))
         }
-        require(merged.all { it.comments.size <= 200000 }) { "1話あたりの保存データが大きすぎます" }
+        require(merged.all { it.comments.size <= Int.MAX_VALUE }) { "1話あたりの保存データが大きすぎます" }
         if (merged.any { fresh -> retained.none { it.id == fresh.id && it.comments == fresh.comments && it.amount == fresh.amount } }) destination.saveSources(episode, merged)
         val result = checkNotNull(destination.read(episode))
 
@@ -123,14 +121,14 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
     private fun parseComments(rows: JSONArray) = List(rows.length()) { i -> rows.getJSONObject(i).let { Comment(it.getLong("at"), it.getString("body"), if (it.isNull("raw")) null else it.getString("raw"), it.optString("fork", "main")) } }.sortedBy { it.at }
     private fun readSlots(root: JSONObject): List<PlaybackCommentSlot> {
         val rows = root.optJSONArray("sources") ?: return emptyList()
-        return List(rows.length()) { i -> rows.getJSONObject(i).let { row -> PlaybackCommentSlot(row.getString("id"), row.getString("title"), PlaybackSource.valueOf(row.getString("source")), parseComments(row.getJSONArray("comments")), true, row.optLong("durationMs"), amount = row.optInt("amount", 1)) } }
+        return List(rows.length()) { i -> rows.getJSONObject(i).let { row -> PlaybackCommentSlot(row.getString("id"), row.getString("title"), PlaybackSource.valueOf(row.getString("source")), parseComments(row.getJSONArray("comments")), true, row.optLong("durationMs"), amount = row.optInt("amount", 1), countLimit = row.optInt("countLimit", 0)) } }
     }
-    private fun slotsJson(slots: List<PlaybackCommentSlot>) = JSONArray().apply { slots.forEach { put(JSONObject().put("id", it.id).put("title", it.title).put("source", it.source.name).put("durationMs", it.durationMs).put("amount", it.amount).put("comments", commentsJson(it.comments))) } }
-    @Synchronized fun saveSources(episode: Episode, incoming: List<PlaybackCommentSlot>, requested: Set<PlaybackSource>? = null, confirmedIds: Set<String> = emptySet()): SavedComments {
+    private fun slotsJson(slots: List<PlaybackCommentSlot>) = JSONArray().apply { slots.forEach { put(JSONObject().put("id", it.id).put("title", it.title).put("source", it.source.name).put("durationMs", it.durationMs).put("amount", it.amount).put("countLimit", it.countLimit).put("comments", commentsJson(it.comments))) } }
+    @Synchronized fun saveSources(episode: Episode, incoming: List<PlaybackCommentSlot>, requested: Set<PlaybackSource>? = null, confirmedIds: Set<String> = emptySet(), maxComments: Int = 0): SavedComments {
         require(incoming.isNotEmpty() && incoming.any { it.comments.isNotEmpty() })
         val existing = readOwn(episode)
         val manualIds = fallback?.readForPlayback(episode)?.let { saved -> saved.slots.map { it.id }.ifEmpty { listOf(saved.info.sourceId) }.toSet() }.orEmpty()
-        val old = existing?.slots?.ifEmpty { listOf(PlaybackCommentSlot(existing.info.sourceId, existing.info.sourceTitle, PlaybackSource.OFFICIAL, existing.comments, true, durationMs = existing.durationMs, amount = existing.info.amount)) }.orEmpty()
+        val old = existing?.slots?.ifEmpty { listOf(PlaybackCommentSlot(existing.info.sourceId, existing.info.sourceTitle, PlaybackSource.OFFICIAL, existing.comments, true, durationMs = existing.durationMs, amount = existing.info.amount, countLimit = existing.countLimit)) }.orEmpty()
         val slots = old.associateByTo(linkedMapOf()) { it.id }.apply { incoming.filter { it.comments.isNotEmpty() && (!it.fromArchive || it.id !in manualIds) }.forEach { fresh ->
             val partial = get(fresh.id)?.takeIf { existing?.isIncompleteSource(fresh.id) == true }
             put(fresh.id, if (partial == null) fresh else fresh.copy(comments = mergeRecoveryComments(partial.comments, fresh.comments)))
@@ -139,7 +137,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
         val primary = slots.firstOrNull { it.source == PlaybackSource.OFFICIAL } ?: slots.first()
         val root = JSONObject().put("version", 2).put("series", episode.series).put("episode", episode.number)
             .put("thumbnailUrl", existing?.info?.thumbnailUrl.orEmpty()).put("ownerName", existing?.info?.ownerName.orEmpty()).put("ownerUrl", existing?.info?.ownerUrl.orEmpty())
-        root.put("sourceId", primary.id).put("sourceTitle", primary.title).put("amount", primary.amount)
+        root.put("sourceId", primary.id).put("sourceTitle", primary.title).put("amount", primary.amount).put("countLimit", maxComments.takeIf { it > 0 } ?: primary.countLimit)
             .put("savedAt", clock()).put("durationMs", primary.durationMs).put("sources", slotsJson(slots))
         if (root.optString("thumbnailUrl").isBlank()) Comments.knownSource(primary.id)?.thumbnailUrl?.let { root.put("thumbnailUrl", it) }
         if (requested != null) root.put("requestedSources", JSONArray(requested.map { it.name }))
@@ -204,21 +202,21 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
     }
     private fun filesList(): List<SavedEpisode> = directory.listFiles { f -> f.extension == "json" }.orEmpty()
         .mapNotNull { readFile(it)?.info }.sortedByDescending { it.savedAt }
-    @Synchronized fun save(episode: Episode, candidate: Candidate, comments: List<Comment>, amount: Int = 1, savedAt: Long = clock()): SavedComments {
+    @Synchronized fun save(episode: Episode, candidate: Candidate, comments: List<Comment>, amount: Int = 1, savedAt: Long = clock(), countLimit: Int = 0): SavedComments {
         require(comments.isNotEmpty()) { "空のコメントは保存できません" }
         directory.mkdirs()
         val previous = readOwn(episode)
         val commentsToSave = if (candidate.id in previous?.incompleteIds.orEmpty()) mergeRecoveryComments(previous!!.slots.firstOrNull { it.id == candidate.id }?.comments ?: previous.comments, comments) else comments
         val data = JSONObject().put("version", 1).put("series", episode.series).put("episode", episode.number)
-            .put("sourceId", niconicoVideoId(candidate.id) ?: candidate.id).put("sourceTitle", candidate.title).put("savedAt", savedAt.coerceAtLeast(0)).put("amount", amount.coerceIn(1, 20)).put("durationMs", candidate.duration * 1000).put("thumbnailUrl", candidate.thumbnailUrl).put("ownerName", candidate.ownerName).put("ownerUrl", candidate.ownerUrl)
+            .put("sourceId", niconicoVideoId(candidate.id) ?: candidate.id).put("sourceTitle", candidate.title).put("savedAt", savedAt.coerceAtLeast(0)).put("amount", amount.coerceAtLeast(1)).put("countLimit", countLimit).put("durationMs", candidate.duration * 1000).put("thumbnailUrl", candidate.thumbnailUrl).put("ownerName", candidate.ownerName).put("ownerUrl", candidate.ownerUrl)
             .put("comments", JSONArray().apply { commentsToSave.forEach { put(JSONObject().put("at", it.at).put("body", it.body).put("raw", it.raw).put("fork", it.fork)) } })
         val oldSlots = previous?.slots.orEmpty()
         if (oldSlots.isNotEmpty()) {
             data.put("version", 2); data.remove("comments")
             val retained = oldSlots.filter { it.id != candidate.id && !(it.source == PlaybackSource.OFFICIAL && it.id == previous?.info?.sourceId) }
-            data.put("sources", slotsJson(listOf(PlaybackCommentSlot(candidate.id, candidate.title, PlaybackSource.OFFICIAL, commentsToSave, durationMs = candidate.duration * 1000, amount = amount)) + retained))
+            data.put("sources", slotsJson(listOf(PlaybackCommentSlot(candidate.id, candidate.title, PlaybackSource.OFFICIAL, commentsToSave, durationMs = candidate.duration * 1000, amount = amount, countLimit = countLimit)) + retained))
         }
-        val verified = runCatching { validateSlot(PlaybackCommentSlot(candidate.id, candidate.title, PlaybackSource.OFFICIAL, commentsToSave, durationMs = candidate.duration * 1000, amount = amount)) }.isSuccess
+        val verified = runCatching { validateSlot(PlaybackCommentSlot(candidate.id, candidate.title, PlaybackSource.OFFICIAL, commentsToSave, durationMs = candidate.duration * 1000, amount = amount, countLimit = countLimit)) }.isSuccess
         return writeData(episode, data, confirmedIds = if (verified) setOf(candidate.id) else emptySet(), prior = previous)
     }
     @Synchronized fun updateSource(episode: Episode, expectedId: String, source: Candidate): SavedEpisode? {
@@ -241,7 +239,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
         val own = directory.listFiles { f -> f.extension == "json" }.orEmpty().asSequence().mapNotNull { readFile(it) }.mapNotNull { saved ->
             if (saved.incompleteIds.any { (niconicoVideoId(it) ?: it) == id }) return@mapNotNull null
             val slot = saved.slots.firstOrNull { (niconicoVideoId(it.id) ?: it.id) == id }
-            if (slot != null) saved.copy(info = saved.info.copy(sourceId = slot.id, sourceTitle = slot.title, count = slot.comments.size, amount = slot.amount, sources = slot.source.name), comments = slot.comments, slots = listOf(slot), durationMs = slot.durationMs)
+            if (slot != null) saved.copy(info = saved.info.copy(sourceId = slot.id, sourceTitle = slot.title, count = slot.comments.size, amount = slot.amount, sources = slot.source.name), comments = slot.comments, slots = listOf(slot), durationMs = slot.durationMs, countLimit = slot.countLimit)
             else saved.takeIf { it.slots.isEmpty() && (niconicoVideoId(it.info.sourceId) ?: it.info.sourceId) == id }
         }.maxWithOrNull(compareBy<SavedComments> { it.info.amount }.thenBy { it.info.savedAt })
         return listOfNotNull(own, fallback?.readSource(input)).maxWithOrNull(compareBy<SavedComments> { it.info.amount }.thenBy { it.comments.size })
@@ -260,7 +258,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
         require(slots.size <= 32 && slots.map { it.id }.distinct().size == slots.size)
         slots.forEach(::validateSlot)
         val comments = if (j.getInt("version") == 2) slots.firstOrNull { (niconicoVideoId(it.id) ?: it.id) == (niconicoVideoId(j.getString("sourceId")) ?: j.getString("sourceId")) }?.comments ?: error("保存元がありません") else parseComments(j.getJSONArray("comments"))
-        require(comments.size in 1..200000 && comments.all { it.at in 0..86_400_000 && it.body.isNotBlank() && it.body.length <= 16000 })
+        require(comments.size in 1..Int.MAX_VALUE && comments.all { it.at in 0..86_400_000 && it.body.isNotBlank() && it.body.length <= 16000 })
         return j
     }
     @Synchronized fun importJson(text: String, upgrade: Boolean = false) {
@@ -268,7 +266,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
         val episode = Episode(j.getString("series"), j.getInt("episode"))
         val existing = read(episode)
         if (existing != null) {
-            val old = existing.slots.ifEmpty { listOf(PlaybackCommentSlot(existing.info.sourceId, existing.info.sourceTitle, PlaybackSource.OFFICIAL, existing.comments, amount = existing.info.amount)) }.associateBy { it.id }
+            val old = existing.slots.ifEmpty { listOf(PlaybackCommentSlot(existing.info.sourceId, existing.info.sourceTitle, PlaybackSource.OFFICIAL, existing.comments, amount = existing.info.amount, countLimit = existing.countLimit)) }.associateBy { it.id }
             val incoming = readSlots(j).ifEmpty { if (upgrade) listOf(PlaybackCommentSlot(j.getString("sourceId"), j.getString("sourceTitle"), PlaybackSource.OFFICIAL, parseComments(j.getJSONArray("comments")), durationMs = j.optLong("durationMs"), amount = j.optInt("amount", 1))) else emptyList() }
             val fresh = incoming.filter { slot -> old[slot.id]?.let { previous -> upgrade && (slot.amount > previous.amount || (slot.amount == previous.amount && (existing.isIncompleteSource(slot.id) || slot.comments.size > previous.comments.size))) } ?: true }
             if (fresh.isNotEmpty()) {
@@ -306,7 +304,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
         java.io.InputStreamReader(input, Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)).use { it.readText() }
     }
     private fun validateSlot(slot: PlaybackCommentSlot) {
-        require(slot.id.length in 1..1000 && slot.durationMs in 0..86_400_000 && slot.amount in 1..20 && slot.comments.size in 1..200000)
+        require(slot.id.length in 1..1000 && slot.durationMs in 0..86_400_000 && slot.amount >= 1 && slot.countLimit >= 0 && slot.comments.isNotEmpty())
         require(slot.comments.all { it.at in 0..86_400_000 && it.body.isNotBlank() && it.body.length <= 16000 })
     }
     private fun backupArchive(target: File, ownerName: String = target.name): File {
@@ -333,10 +331,10 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
             val episode = Episode(root.getString("series"), root.getInt("episode"))
             require(episode.series.isNotBlank() && episode.series.length <= 300 && episode.number in 0..9999 && file(episode).name == target.name)
             if (info != null) require(info.episode == episode)
-            info = info ?: SavedEpisode(episode, root.optString("sourceId"), root.optString("sourceTitle"), root.optLong("savedAt"), 0, target.length(), root.optInt("amount", 1).coerceIn(1, 20), root.optString("thumbnailUrl"), root.optString("ownerName"), root.optString("ownerUrl"))
+            info = info ?: SavedEpisode(episode, root.optString("sourceId"), root.optString("sourceTitle"), root.optLong("savedAt"), 0, target.length(), root.optInt("amount", 1).coerceAtLeast(1), root.optString("thumbnailUrl"), root.optString("ownerName"), root.optString("ownerUrl"))
             val version = root.getInt("version")
             if (version !in 1..2) return ArchiveCheck(target.name, info, "unsupported")
-            info = info.copy(amount = root.optInt("repairAmount", info.amount).coerceIn(1, 20))
+            info = info.copy(amount = root.optInt("repairAmount", info.amount).coerceAtLeast(1))
             val broken = mutableListOf<BrokenArchiveSource>()
             val valid = mutableSetOf<PlaybackSource>()
             val damaged = mutableSetOf<PlaybackSource>()
@@ -351,7 +349,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
                     val row = rows.optJSONObject(n)
                     val kind = row?.optString("source")?.let { runCatching { PlaybackSource.valueOf(it) }.getOrNull() } ?: return ArchiveCheck(target.name, info, "unsupported")
                     try { val slot = readSlots(JSONObject().put("sources", JSONArray().put(row))).single(); validateSlot(slot); require(ids.add(slot.id)); valid += kind }
-                    catch (_: Exception) { if (row?.optString("id").isNullOrBlank()) return ArchiveCheck(target.name, info, "unsupported"); damaged += kind; broken += BrokenArchiveSource(kind, row!!.optString("id"), row.optString("title"), row.optLong("durationMs"), row.optInt("amount", 1).coerceIn(1, 20)) }
+                    catch (_: Exception) { if (row?.optString("id").isNullOrBlank()) return ArchiveCheck(target.name, info, "unsupported"); damaged += kind; broken += BrokenArchiveSource(kind, row!!.optString("id"), row.optString("title"), row.optLong("durationMs"), row.optInt("amount", 1).coerceAtLeast(1)) }
                 }
                 require(root.getLong("savedAt") >= 0)
                 if (root.getString("sourceId") !in ids && broken.none { it.id == root.getString("sourceId") }) { damaged += PlaybackSource.OFFICIAL; broken += BrokenArchiveSource(PlaybackSource.OFFICIAL, root.getString("sourceId"), root.optString("sourceTitle"), amount = info.amount) }
@@ -388,7 +386,7 @@ class CommentStore(private val directory: File, private val maxBytes: Long = Lon
                 }
                 if (intact.isEmpty()) return@let null
                 JSONObject().put("id", id).put("title", row.optString("title")).put("source", kind.name).put("comments", commentsJson(intact))
-                    .put("durationMs", row.optLong("durationMs").coerceIn(0, 86_400_000)).put("amount", row.optInt("amount", 1).coerceIn(1, 20))
+                    .put("durationMs", row.optLong("durationMs").coerceIn(0, 86_400_000)).put("amount", row.optInt("amount", 1).coerceAtLeast(1))
             }
         }
         if (valid.isEmpty()) return

@@ -65,7 +65,9 @@ class CommentPreviewTest {
             val expected = CommentDisplayProfile(size = 22f, opacity = .4f, speed = 1.2f, fps = 120, position = "custom", customY = .23f)
             settings.edit { expected.write(it); it[androidx.datastore.preferences.core.booleanPreferencesKey("flowOnly")] = true; it[androidx.datastore.preferences.core.stringPreferencesKey("ngWords")] = "NG-example" }
             runCurrent()
-            assertEquals(expected, model.settings.value!!.profile)
+            assertEquals(expected.copy(position = "center"), model.settings.value!!.profile)
+            assertEquals("custom", settings.load().getString("overlayPosition", "center"))
+            assertEquals(.23f, settings.load().getFloat("overlayCustomY", 1f))
             assertEquals("NG-example", model.settings.value!!.ngWords)
             assertEquals(oldSize, Session.size.value)
         } finally {

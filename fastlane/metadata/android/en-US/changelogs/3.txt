@@ -1,0 +1,5 @@
+Updated Niconico video information requests for the new API format.
+Added Hulu title, episode and playback-time detection. Hulu now appears directly below Prime Video.
+Added numeric acquisition multipliers above 20x and a combined comment limit across sources.
+Centered comments in the preview while preserving other display settings.
+Preserved acquisition settings across saved comments, reservations and backups.

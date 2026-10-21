@@ -12,17 +12,20 @@ class OfflineCommentRepository(private val official: CommentRepository, private 
     private val sourceMetadata: suspend (String) -> Candidate = Comments::sourceMetadata) {
     private val permits = Semaphore(2)
     suspend fun save(episode: Episode, searchEpisode: Episode = episode, amount: Int = 1, selected: Set<PlaybackSource> = OfflineSources,
-        candidate: Candidate? = null, channel: Long? = null, subtitle: String = "", refresh: Boolean = false, onFetched: (Set<String>) -> Unit = {}, progress: (String, Int, Int) -> Unit = { _, _, _ -> }): SavedComments = withContext(Dispatchers.IO) { permits.withPermit {
+        candidate: Candidate? = null, channel: Long? = null, subtitle: String = "", refresh: Boolean = false, maxComments: Int = 0, onFetched: (Set<String>) -> Unit = {}, progress: (String, Int, Int) -> Unit = { _, _, _ -> }): SavedComments = withContext(Dispatchers.IO) { permits.withPermit {
         require(selected.isNotEmpty())
         if (!refresh) official.promoteCached(episode, selected)
+        if (!refresh && maxComments > 0) official.store.read(episode)?.takeIf {
+            (it.info.count >= maxComments || it.countLimit >= maxComments) && it.incompleteIds.isEmpty() && it.slots.map { slot -> slot.source }.toSet() == selected
+        }?.let { return@withPermit it.limited(maxComments).copy(fromArchive = true) }
         var officialError: Exception? = null
         if (PlaybackSource.OFFICIAL in selected) {
             try {
                 val previous = official.store.read(episode)
-                val saved = if (refresh && previous?.info?.sources?.split(",")?.contains("OFFICIAL") == true) official.refresh(previous.info)
-                    else official.obtain(episode, source = candidate, amount = amount, episodeTitle = subtitle, strictMatch = channel == null,
+                val saved = if (refresh && previous?.info?.sources?.split(",")?.contains("OFFICIAL") == true) official.refresh(previous.info, maxComments)
+                    else official.obtain(episode, source = candidate, amount = amount, maxComments = maxComments, episodeTitle = subtitle, strictMatch = channel == null,
                         requiredChannelId = channel, sourceEpisode = searchEpisode, forceSearch = !official.store.isAutomaticCache, progress = progress)
-                if (!saved.fromArchive && saved.info.amount >= amount) onFetched(setOf(saved.info.sourceId))
+                if (!saved.fromArchive && (maxComments > 0 || saved.info.amount >= amount)) onFetched(setOf(saved.info.sourceId))
                 if (saved.durationMs <= 0) {
                     try { official.store.updateSource(episode, saved.info.sourceId, sourceMetadata(saved.info.sourceId)) }
                     catch (e: CancellationException) { throw e } catch (_: Exception) { }
@@ -32,11 +35,11 @@ class OfflineCommentRepository(private val official: CommentRepository, private 
             catch (e: Exception) { officialError = e }
         }
         try {
-            val obtained = playback.obtain(episode, 0, "", amount, {}, progress, offlineSave = true, requestedSources = selected, searchEpisode = searchEpisode, skipOfficial = true, refresh = refresh)
-            onFetched(obtained.slots.filter { !it.fromArchive && (it.source in setOf(PlaybackSource.JIKKYO, PlaybackSource.LIVE_ARCHIVE) || it.amount >= amount) }.map { it.id }.toSet())
+            val obtained = playback.obtain(episode, 0, "", amount, {}, progress, offlineSave = true, requestedSources = selected, searchEpisode = searchEpisode, skipOfficial = true, refresh = refresh, maxComments = maxComments)
+            onFetched(obtained.slots.filter { !it.fromArchive && (maxComments > 0 || it.source in setOf(PlaybackSource.JIKKYO, PlaybackSource.LIVE_ARCHIVE) || it.amount >= amount) }.map { it.id }.toSet())
         } catch (e: CancellationException) { throw e }
         catch (e: MatchUnavailable) { throw officialError ?: e }
         if (officialError is TrafficLimitReached) throw officialError
-        checkNotNull(official.store.read(episode))
+        checkNotNull(official.store.read(episode)).limited(maxComments)
     } }
 }

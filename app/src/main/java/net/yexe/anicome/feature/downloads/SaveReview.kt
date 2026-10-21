@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.withPermit
 data class SaveSpace(val free: Long = Long.MAX_VALUE, val used: Long = 0L, val limit: Long = Long.MAX_VALUE, val typicalEpisodeBytes: Long = 1_048_576L)
 data class SaveEpisodeReview(val episode: Episode, val searchEpisode: Episode, val subtitle: String = "", val candidate: Candidate? = null,
     val issue: String = "", val selected: Boolean = true)
-data class SaveReview(val episodes: List<SaveEpisodeReview>, val bytesPerEpisode: Long, val space: SaveSpace, val amount: Int = 1) {
+data class SaveReview(val episodes: List<SaveEpisodeReview>, val bytesPerEpisode: Long, val space: SaveSpace, val amount: Int = 1, val maxComments: Int = 0) {
     val selected get() = episodes.filter { it.selected }
     val duplicateVideoIds get() = duplicateReviewVideoIds(selected)
     val estimatedBytes get() = bytesPerEpisode.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / maxOf(1, selected.size)) * selected.size
@@ -55,8 +55,8 @@ class SaveReviewRepository(private val resolve: suspend (AnimeInfo, Int) -> Reso
             SaveEpisodeReview(episode, search, subtitle, candidate, issue, selectable)
         } } }.awaitAll()
         val space = storage()
-        val estimate = space.typicalEpisodeBytes.coerceIn(262_144L, 134_217_728L) * amount.coerceIn(1, 20) * sources.size.coerceAtLeast(1)
-        SaveReview(rows, estimate, space, amount.coerceIn(1, 20))
+        val estimate = space.typicalEpisodeBytes.coerceIn(262_144L, 134_217_728L) * amount.coerceAtLeast(1) * sources.size.coerceAtLeast(1)
+        SaveReview(rows, estimate, space, amount.coerceAtLeast(1))
     } }
 }
 

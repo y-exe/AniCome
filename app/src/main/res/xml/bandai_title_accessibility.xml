@@ -2,7 +2,7 @@
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
-    android:packageNames="com.bch.sp.bchmembershipapp,com.amazon.avod.thirdpartyclient,com.nttdocomo.android.danimeapp"
+    android:packageNames="com.bch.sp.bchmembershipapp,com.amazon.avod.thirdpartyclient,com.nttdocomo.android.danimeapp,jp.happyon.android"
     android:notificationTimeout="300"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="false"

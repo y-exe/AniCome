@@ -40,6 +40,8 @@ class SettingsViewModel(val controller: AppCoordinator, private val profileRepos
     fun setColorStyle(value: String) = controller.setColorStyle(value)
     fun setFontStyle(value: String) = controller.setFontStyle(value)
     fun setNgWords(value: String) = controller.setNgWords(value)
+    fun setCommentCountMode(value: Boolean) = controller.setCommentCountMode(value)
+    fun setCommentCountLimit(value: Int) = controller.setCommentCountLimit(value)
     fun setCommentAmount(value: Int) = controller.setCommentAmount(value)
     fun setWifiOnly(value: Boolean) = controller.setWifiOnly(value)
     fun setWatchDownloads(value: Boolean) = controller.setWatchDownloads(value)

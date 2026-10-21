@@ -80,7 +80,7 @@ class DownloadRepository(private val context: Context, private val settings: Set
         cancelMany(all().filter { it.state !in setOf(WorkInfo.State.SUCCEEDED, WorkInfo.State.CANCELLED) }.map { it.id }.toSet())
     }
     suspend fun reserve(spec: ReservationSpec) {
-        val prepared = if (spec.amount == 0) spec.copy(amount = settings.load().getInt("commentAmount", 5).coerceIn(1, 20)) else spec
+        val prepared = if (spec.amount == 0) settings.load().let { p -> spec.copy(amount = p.getInt("commentAmount", 5).coerceAtLeast(1), maxComments = if (p.getBoolean("commentCountMode", false)) p.getInt("commentCountLimit", 5000).coerceAtLeast(1) else 0) } else spec
         if (scheduler != null) scheduler.submit(prepared) else DownloadWorker.enqueueLegacy(context, prepared)
     }
     fun submit(spec: ReservationSpec) {

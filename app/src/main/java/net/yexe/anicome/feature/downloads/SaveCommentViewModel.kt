@@ -41,18 +41,23 @@ class SaveCommentRepository(
         return result
     }
     suspend fun review(work: AnimeInfo, episodes: List<Episode>, sources: Set<PlaybackSource>, channel: Long?, progress: (Int, Int) -> Unit): SaveReview =
-        reviews.prepare(work, episodes, sources, channel, settings?.load()?.getInt("commentAmount", 5) ?: 1, progress)
+        settings?.load().let { prefs ->
+            val amount = prefs?.getInt("commentAmount", 5)?.coerceAtLeast(1) ?: 1
+            val maximum = if (prefs?.getBoolean("commentCountMode", false) == true) prefs.getInt("commentCountLimit", 5000).coerceAtLeast(1) else 0
+            reviews.prepare(work, episodes, sources, channel, if (maximum > 0) ((maximum.toLong() + 999) / 1000).toInt() else amount, progress).copy(amount = amount, maxComments = maximum)
+        }
     suspend fun rememberedChannel(work: AnimeInfo): Long? = settings?.load()?.getLong("workChannel:${CommentStore.fileKey(work.title)}", 0L)?.takeIf { it > 0L }
     fun clearChannel(work: AnimeInfo) { settings?.putLong("workChannel:${CommentStore.fileKey(work.title)}", 0L) }
-    suspend fun save(episodes: List<Episode>, work: AnimeInfo? = null, channel: Long? = null, sources: Set<PlaybackSource> = OfflineSources, reviewed: List<SaveEpisodeReview> = emptyList(), estimatedBytes: Long = 0L, requestedAmount: Int? = null) = withContext(ioDispatcher) {
+    suspend fun save(episodes: List<Episode>, work: AnimeInfo? = null, channel: Long? = null, sources: Set<PlaybackSource> = OfflineSources, reviewed: List<SaveEpisodeReview> = emptyList(), estimatedBytes: Long = 0L, requestedAmount: Int? = null, requestedMaximum: Int? = null) = withContext(ioDispatcher) {
         require(sources.isNotEmpty())
         require(duplicateReviewVideoIds(reviewed.filter { it.episode in episodes }).isEmpty()) { DuplicateReviewMessage }
         if (work != null && channel != null) settings?.putLong("workChannel:${CommentStore.fileKey(work.title)}", channel)
         if (work != null) settings?.putString("selectedWork:${CommentStore.fileKey(work.title)}", org.json.JSONObject().put("id", work.id).put("title", work.title).put("image", work.imageUrl).put("year", work.year ?: 0).put("episodes", work.episodes ?: 0).put("provider", work.provider).toString())
         val preferences = settings?.load()
         val wifi = preferences?.getBoolean("wifiOnly", true) ?: true
-        val amount = requestedAmount?.coerceIn(1, 20) ?: preferences?.getInt("commentAmount", 5)?.coerceIn(1, 20) ?: 1
-        episodes.forEach { ensureActive(); if (downloads != null) downloads.reserve(ReservationSpec(it, catalog = work, channel = channel, sources = sources, wifi = wifi, reviewed = reviewed.firstOrNull { row -> row.episode == it }, amount = amount, estimatedBytes = estimatedBytes)) else if (work == null) reserve(it) else reserveSelected(it, work) } }
+        val amount = requestedAmount?.coerceAtLeast(1) ?: preferences?.getInt("commentAmount", 5)?.coerceAtLeast(1) ?: 1
+        val maximum = requestedMaximum ?: if (preferences?.getBoolean("commentCountMode", false) == true) preferences.getInt("commentCountLimit", 5000).coerceAtLeast(1) else 0
+        episodes.forEach { ensureActive(); if (downloads != null) downloads.reserve(ReservationSpec(it, catalog = work, channel = channel, sources = sources, wifi = wifi, reviewed = reviewed.firstOrNull { row -> row.episode == it }, amount = amount, estimatedBytes = estimatedBytes, maxComments = maximum)) else if (work == null) reserve(it) else reserveSelected(it, work) } }
 }
 data class SaveCommentState(
     val query: String = "", val results: List<AnimeInfo> = emptyList(), val work: AnimeInfo? = null,
@@ -153,7 +158,7 @@ class SaveCommentViewModel(private val repository: SaveCommentRepository) : View
         if (episodes.isEmpty() || !review.enoughSpace || mutable.value.saving) return
         mutable.update { it.copy(saving = true, error = "") }
         viewModelScope.launch {
-            try { repository.save(episodes, work, mutable.value.channel?.id ?: mutable.value.rememberedChannel, mutable.value.sources, rows, estimatedBytes = review.bytesPerEpisode, requestedAmount = review.amount); Session.message.value = "${episodes.size}話を保存予約しました"; mutable.update { it.copy(saving = false, complete = true, review = null) } }
+            try { repository.save(episodes, work, mutable.value.channel?.id ?: mutable.value.rememberedChannel, mutable.value.sources, rows, estimatedBytes = review.bytesPerEpisode, requestedAmount = review.amount, requestedMaximum = review.maxComments); Session.message.value = "${episodes.size}話を保存予約しました"; mutable.update { it.copy(saving = false, complete = true, review = null) } }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { mutable.update { it.copy(saving = false, error = "保存予約を作成できませんでした") } }
         }

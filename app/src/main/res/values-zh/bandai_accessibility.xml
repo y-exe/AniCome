@@ -1,4 +1,4 @@
 <resources>
     <string name="bandai_title_accessibility_label">AniCome：作品名识别</string>
-    <string name="bandai_title_accessibility_description">读取万代频道、Prime Video 和 d Anime Store 的作品名、集数与播放时间以同步评论。不会操作屏幕或截屏。</string>
+    <string name="bandai_title_accessibility_description">读取万代频道、Prime Video 、d Anime Store 和 Hulu 的作品名、集数与播放时间以同步评论。不会操作屏幕或截屏。</string>
 </resources>

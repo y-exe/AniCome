@@ -11,7 +11,7 @@ class ServiceSelectionUiTest : InteractionFixture() {
             val labels = texts(view)
             assertTrue(labels.contains("通常の取得方法"))
             assertTrue(labels.contains("ユーザー補助で取得"))
-            assertFalse(labels.contains("Hulu"))
+            assertTrue(StreamingService.HULU in StreamingService.accessibilityServices)
             assertFalse(labels.contains("FOD"))
         } finally { view.disposeComposition() }
         val help = fixture { AccessibilityServiceHelp {} }

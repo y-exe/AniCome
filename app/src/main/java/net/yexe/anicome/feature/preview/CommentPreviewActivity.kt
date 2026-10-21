@@ -72,7 +72,7 @@ class CommentPreviewActivity : ComponentActivity() {
                             AppText("取得済み ${load.available}件 · 試し表示 ${selected.size}件")
                             PreviewCommentCountPicker(limit, model::count)
                             AppText("取得済みコメントから新しい順に選び、動画の時刻に合わせて表示します。")
-                            AppText("表示位置・文字サイズ・不透明度・速度・NGワードは現在の設定を使用します。")
+                            AppText("表示位置は中央固定。文字サイズ・不透明度・速度・NGワードは現在の設定を使用します。")
                         }
                     }, confirmButton = { TextButton({ settings = false }) { AppText("閉じる") } })
                 }

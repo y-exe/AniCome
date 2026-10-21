@@ -54,9 +54,10 @@ class CommentWebView(context: Context, private val preview: Boolean = false, pri
                 val ownApp = Session.previewVisible.value
                 val enabled = if (external != null) external.playing else testing || (playback.connected && playback.playing && position != null && matching && data.isNotEmpty() && !advertisement && !ownApp && Session.hiddenUntil.value <= now && Session.hiddenEpisode.value != playback.key)
                 val display = external?.settings
-                val profile = display?.profile ?: CommentDisplayProfile(size = Session.size.value, opacity = Session.opacity.value,
+                val profile = (display?.profile ?: CommentDisplayProfile(size = Session.size.value, opacity = Session.opacity.value,
                     speed = Session.speedScale.value, fps = Session.fps.value, color = Session.colorStyle.value, font = Session.fontStyle.value,
-                    position = Session.overlayPosition.value, customY = Session.customPosition.value, renderMode = Session.renderMode.value)
+                    position = Session.overlayPosition.value, customY = Session.customPosition.value, renderMode = Session.renderMode.value))
+                    .let { if (external != null) it.copy(position = "center") else it }
                 val ngWords = display?.ngWords ?: Session.effectiveNgWords.value
                 val density = if (display != null) 1f else Session.displayDensity.value
                 val renderKey = listOf(profile.size, profile.opacity, profile.speed, density, profile.fps, profile.color, profile.font, ngWords, Session.commentBinding.value, profile.position, profile.customY, profile.renderMode).joinToString("|")

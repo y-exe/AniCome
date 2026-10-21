@@ -1,17 +1,25 @@
-AniCome overlays Niconico comments on Android video apps and synchronizes them with playback.
+<b>Your usual anime, with a little company.</b>
 
-Features:
-• Automatic series and episode matching
-• Official Niconico, d Anime, live archive and Jikkyo comment sources
-• Per-app comment position, size, opacity and speed
-• Advance comment downloads, automatic cache cleanup and offline comment playback
-• NG-word filtering and a compact floating playback panel
+Share the excitement of a favorite scene or laugh at an unexpected comment. AniCome brings Niconico's scrolling comments to your Android streaming apps, adding the feeling of watching together to the way you already watch.
 
-Standard playback information: Netflix, U-NEXT, ABEMA, DMM TV, TVer and NHK ONE.
-Accessibility-assisted detection: Prime Video, d Anime Store and Bandai Channel. AniCome reads titles or playback times displayed in these apps to synchronize comments. Permission is requested when selecting an app for the first time. For screen-based time detection, show the player controls after seeking to resynchronize.
+<b>Keep watching in your favorite app</b>
+AniCome matches the series, episode and playback position to find and synchronize comments. Sources include official Niconico videos, d Anime videos, live archives and Jikkyo logs. You can also search manually and fine-tune the timing.
 
-Notification access is used to detect playback information. Display-over-other-apps permission is required to overlay comments. Niconico login is required during setup. Requests for comments and series information are sent to third-party services.
+<b>Make yourself comfortable</b>
+Adjust comment position, text size, opacity and speed for each streaming app. Filter unwanted words and use the compact floating panel to adjust comments and timing while you watch.
 
-F-Droid builds receive application updates through F-Droid. Artwork and preview comments are fetched at runtime rather than bundled. A network connection is required for the initial download.
+<b>Get comments ready ahead of time</b>
+Download comments by series and episode to use them offline later. Set an expiry time for automatically cached comments to keep storage from filling up.
 
-AniCome does not play or download the streaming services' videos. It is an independent application, not an official product of Niconico or any supported streaming service.
+<b>Supported apps</b>
+<ul>
+<li>Standard playback information: Netflix, U-NEXT, ABEMA, DMM TV, TVer and NHK ONE</li>
+<li>Accessibility-assisted detection: Prime Video, d Anime Store, Bandai Channel and Hulu</li>
+</ul>
+
+Accessibility-assisted apps use titles or playback times shown on screen. Permission is explained when you first select one of these apps. For screen-based timing, show the player controls after seeking to resynchronize. Automatic matching and synchronization may not work for every title or app state.
+
+<b>Getting started</b>
+Niconico sign-in is required during setup. Notification access detects playback information, and display-over-other-apps permission lets comments appear over your video. Fetching comments, series information, artwork and preview comments connects to third-party services. F-Droid builds receive updates through F-Droid.
+
+AniCome is an independent application, not an official product of Niconico or any streaming service. It does not play or download the streaming services' videos.

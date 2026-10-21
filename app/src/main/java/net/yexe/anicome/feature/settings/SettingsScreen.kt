@@ -117,11 +117,9 @@ import coil3.request.crossfade
                     SettingSlider("不透明度", "${(opacity * 100).roundToInt()}%", opacity, .2f..1f, 15, change = settings::setOpacity)
                     SettingSlider("速度", "${(speed * 100).roundToInt()}%", speed, .25f..1.5f, 24, change = settings::setSpeedScale)
                     }
-                    SettingsCard {
-                    SettingSlider("取得量", "${if (linked) amount else 1}倍", (if (linked) amount else 1).toFloat(), 1f..20f, 18, enabled = linked) { settings.setCommentAmount(it.toInt()) }
-                    PreferenceHint("2倍以上にするにはニコニコへのログインが必要です。")
-                    OutlinedButton({ settings.openPage("コメント取得") }, Modifier.fillMaxWidth()) { AppText("ニコニコ連携を開く") }
-                    }
+                    val countMode by app.commentCountMode.collectAsStateWithLifecycle()
+                    val countLimit by app.commentCountLimit.collectAsStateWithLifecycle()
+                    CommentAcquisitionSettings(amount, countMode, countLimit, linked, settings::setCommentAmount, settings::setCommentCountMode, settings::setCommentCountLimit) { settings.openPage("コメント取得") }
                     PreferenceSection("描画")
                     SettingsCard {
                     SettingSlider("描画フレームレート", "$fps fps", fps.toFloat(), 15f..144f, 128) { settings.setFps(it.roundToInt()) }

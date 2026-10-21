@@ -30,11 +30,11 @@ object Comments {
         val id = niconicoVideoId(input) ?: error("ニコニコの動画IDを確認できません")
         sourceCache[id]?.let { return@withContext it }
         val session = NiconicoLogin.sessionCookie()
-        val watch = request("https://www.nicovideo.jp/watch/$id?responseType=json", cookie = session).getJSONObject("data").getJSONObject("response")
+        val watch = NiconicoWatch.load(id, session)
         NiconicoLogin.recordViewer(session, watch)
         parseNiconicoSource(id, watch).also { sourceCache[id] = it; sourceCache[it.id] = it }
     }
-    const val MAX_AMOUNT = 20
+    const val MAX_AMOUNT = Int.MAX_VALUE
 
      
     fun availableAmount(requested: Int, linked: Boolean = NiconicoLogin.isLinked()): Int =
@@ -172,18 +172,20 @@ object Comments {
     }
      
     suspend fun load(input: String, amount: Int = 1, progress: (current: Int, target: Int) -> Unit = { _, _ -> }): List<Comment> = loadPages(input, availableAmount(amount), progress)
+    suspend fun loadToCount(input: String, amount: Int, maxComments: Int, progress: (Int, Int) -> Unit = { _, _ -> }): List<Comment> =
+        if (maxComments <= 0) load(input, amount, progress) else loadPages(input, if (NiconicoLogin.isLinked()) Int.MAX_VALUE else 1, progress, wanted = maxComments)
     suspend fun loadPreview(progress: (Int, Int) -> Unit): List<Comment> {
         check(NiconicoLogin.isLinked()) { "ニコニコにログインしてください" }
         return loadPages("so23335421", 1000, progress, 128_000L..228_000L, 30_000)
     }
     private suspend fun loadPages(input: String, multiplier: Int, progress: (Int, Int) -> Unit,
         window: LongRange? = null, wanted: Int = Int.MAX_VALUE): List<Comment> = withContext(Dispatchers.IO) {
-        progress(0, if (window == null) multiplier * 1000 else wanted)
+        val target = if (wanted == Int.MAX_VALUE) commentTarget(multiplier) else wanted
+        progress(0, target)
         val id = niconicoVideoId(input)
             ?: error("ニコニコ動画のURLまたは動画IDを入力してください")
         val session = NiconicoLogin.sessionCookie()
-        val watch = request("https://www.nicovideo.jp/watch/$id?responseType=json", cookie = session)
-            .getJSONObject("data").getJSONObject("response")
+        val watch = NiconicoWatch.load(id, session)
         NiconicoLogin.recordViewer(session, watch)
         runCatching { parseNiconicoSource(id, watch) }.getOrNull()?.let { sourceCache[id] = it; sourceCache[it.id] = it }
         val commentData = watch.optJSONObject("comment") ?: error("動画 $id のコメント情報がありません（非公開・視聴制限の可能性）")
@@ -220,20 +222,7 @@ object Comments {
         }
         val result = fetch(additions)
         val threads = result.getJSONObject("data").getJSONArray("threads")
-        val firstMain = mainThread(threads)?.optJSONArray("comments")?.optJSONObject(0)
-        if (window != null) for (i in 0 until threads.length()) {
-            val item = threads.getJSONObject(i)
-            val all = item.getJSONArray("comments")
-            item.put("comments", org.json.JSONArray().apply {
-                for (j in 0 until all.length()) if (all.getJSONObject(j).optLong("vposMs", -1) in window) put(all.getJSONObject(j))
-            })
-        }
-        progress((0 until threads.length()).sumOf { index -> threads.getJSONObject(index).optJSONArray("comments")?.length() ?: 0 }, if (window == null) multiplier * 1000 else wanted)
-        if (multiplier > 1) {
-            val base = mainThread(threads)
-            val baseComments = base?.optJSONArray("comments")
-            val first = if (window == null) baseComments?.optJSONObject(0) else firstMain
-            if (base != null && baseComments != null && first != null && first.optLong("no") >= 5) {
+        mainThread(threads)?.let { base ->
                 val fork = base.optString("fork")
                 val threadId = base.optString("id")
                 params.put("targets", org.json.JSONArray().apply {
@@ -243,22 +232,58 @@ object Comments {
                         if (target.optString("fork") == fork && target.optString("id") == threadId) put(target)
                     }
                 })
+        }
+        collectPages(threads, multiplier, progress, window, wanted) { cursor ->
+            delay(1000)
+            fetch(JSONObject().put("when", cursor).put("res_from", -1000))
+        }
+    }
+    internal suspend fun collectPages(threads: org.json.JSONArray, multiplier: Int, progress: (Int, Int) -> Unit,
+        window: LongRange? = null, wanted: Int = Int.MAX_VALUE, fetchPast: suspend (Long) -> JSONObject): List<Comment> {
+        val target = if (wanted == Int.MAX_VALUE) commentTarget(multiplier) else wanted
+        val firstMain = mainThread(threads)?.optJSONArray("comments")?.optJSONObject(0)
+        for (i in 0 until threads.length()) {
+            val item = threads.getJSONObject(i)
+            val all = item.getJSONArray("comments")
+            val seen = mutableSetOf<String>()
+            item.put("comments", org.json.JSONArray().apply {
+                for (j in 0 until all.length()) {
+                    val comment = all.getJSONObject(j)
+                    if (comment.optString("body").isNotBlank() && comment.optLong("vposMs", -1) >= 0 &&
+                        (window == null || comment.optLong("vposMs", -1) in window) &&
+                        seen.add("${comment.optLong("no")}:${comment.optString("postedAt")}:${comment.optLong("vposMs")}:${comment.optString("body")}")) put(comment)
+                }
+            })
+        }
+        progress((0 until threads.length()).sumOf { index -> threads.getJSONObject(index).optJSONArray("comments")?.length() ?: 0 }.coerceAtMost(target), target)
+        if (multiplier > 1) {
+            val base = mainThread(threads)
+            val baseComments = base?.optJSONArray("comments")
+            val first = firstMain
+            if (base != null && baseComments != null && first != null && first.optLong("no") >= 5) {
+                val fork = base.optString("fork")
+                val threadId = base.optString("id")
                 var cursor = first.optString("postedAt").toEpochSeconds()
+                fun identity(comment: JSONObject) = "${comment.optLong("no")}:${comment.optString("postedAt")}:${comment.optLong("vposMs")}:${comment.optString("body")}"
+                val seen = (0 until baseComments.length()).map { identity(baseComments.getJSONObject(it)) }.toHashSet()
+                val otherCount = (0 until threads.length()).filter { threads.getJSONObject(it) !== base }.sumOf { threads.getJSONObject(it).getJSONArray("comments").length() }
                 for (batch in 1 until multiplier) {
-                    if (cursor == null || (window != null && baseComments.length() >= wanted)) break
-                    delay(1000)
-                    val next = fetch(JSONObject().put("when", cursor).put("res_from", -1000))
+                    if (cursor == null || baseComments.length().toLong() + otherCount >= wanted) break
+                    val next = fetchPast(cursor)
                     val nextMain = thread(next.getJSONObject("data").getJSONArray("threads"), fork, threadId) ?: break
                     val nextComments = nextMain.optJSONArray("comments") ?: break
                     val nextFirst = nextComments.optJSONObject(0) ?: break
                     for (i in 0 until nextComments.length()) {
                         val comment = nextComments.getJSONObject(i)
-                        if (window == null || comment.optLong("vposMs", -1) in window) baseComments.put(comment)
+                        if (comment.optString("body").isNotBlank() && comment.optLong("vposMs", -1) >= 0 &&
+                            (window == null || comment.optLong("vposMs", -1) in window) && seen.add(identity(comment))) {
+                            baseComments.put(comment)
+                        }
                     }
-                    progress(baseComments.length().coerceAtMost(wanted), if (window == null) multiplier * 1000 else wanted)
+                    progress((baseComments.length().toLong() + otherCount).coerceAtMost(target.toLong()).toInt(), target)
                     if (nextFirst.optLong("no") < 5) break
                     val nextCursor = nextFirst.optString("postedAt").toEpochSeconds()
-                    if (window != null && (nextCursor == null || nextCursor >= cursor)) break
+                    if (nextCursor == null || nextCursor >= cursor) break
                     cursor = nextCursor
                 }
             }
@@ -274,8 +299,9 @@ object Comments {
             }
         }.distinct().sortedBy { it.at }
         require(parsed.isNotEmpty()) { "取得できるコメントがありません" }
-        progress(parsed.size, parsed.size)
-        parsed
+        val limited = newestComments(parsed, wanted)
+        progress(limited.size, limited.size)
+        return limited
     }
     private fun mainThread(threads: org.json.JSONArray): JSONObject? {
         var result: JSONObject? = null

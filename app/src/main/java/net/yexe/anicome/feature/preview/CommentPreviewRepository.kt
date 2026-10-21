@@ -14,7 +14,7 @@ data class PreviewPlayback(val position: Long = 0, val duration: Long = 90_000, 
 data class PreviewRenderFrame(val comments: List<Comment>, val position: Long, val playing: Boolean, val speed: Float = 1f, val settings: PreviewDisplaySettings? = null)
 
 data class PreviewDisplaySettings(val profile: CommentDisplayProfile = CommentDisplayProfile(), val ngWords: String = "")
-fun previewDisplaySettings(p: androidx.datastore.preferences.core.Preferences) = PreviewDisplaySettings(CommentDisplayProfile.read(p), SettingsSnapshot(p).getString("ngWords", "").orEmpty())
+fun previewDisplaySettings(p: androidx.datastore.preferences.core.Preferences) = PreviewDisplaySettings(CommentDisplayProfile.read(p).copy(position = "center"), SettingsSnapshot(p).getString("ngWords", "").orEmpty())
 
 fun previewCommentSelection(comments: List<Comment>, duration: Long, count: Int): List<Comment> {
     if (duration <= 0) return emptyList()

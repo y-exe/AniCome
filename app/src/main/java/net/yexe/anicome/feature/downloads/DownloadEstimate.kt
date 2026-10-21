@@ -7,7 +7,7 @@ internal const val MAX_DOWNLOAD_ESTIMATE = 128L * 1024 * 1024 * 20 * 7
 internal fun estimatedCommentBytes(items: List<SavedEpisode>, amount: Int, sources: Int): Long {
     val sizes = items.filter { it.bytes > 0 }.map { it.bytes / it.amount.coerceAtLeast(1) / it.sources.split(",").filter(String::isNotBlank).size.coerceAtLeast(1) }.sorted()
     val unit = if (sizes.isEmpty()) 1_048_576L else sizes[sizes.size / 2].coerceIn(262_144L, 134_217_728L)
-    return (unit * amount.coerceIn(1, 20) * sources.coerceIn(1, 7)).coerceAtMost(MAX_DOWNLOAD_ESTIMATE)
+    return (unit * amount.coerceAtLeast(1) * sources.coerceIn(1, 7)).coerceAtMost(MAX_DOWNLOAD_ESTIMATE)
 }
 internal class ReservationDurationHistory(rows: List<ReservationEntry>) {
     private data class Key(val series: String, val amount: Int, val sources: Set<PlaybackSource>)
@@ -18,7 +18,7 @@ internal class ReservationDurationHistory(rows: List<ReservationEntry>) {
             val output = readReservationOutput(entry.output)
             val elapsed = output.getLong("elapsedMs", 0)
             val amount = output.getInt("amount", 0)
-            if (output.getBoolean("downloadedNew", false) && elapsed in 1000..86_400_000L && amount in 1..20) {
+            if (output.getBoolean("downloadedNew", false) && elapsed in 1000..86_400_000L && amount >= 1) {
                 val sources = entry.spec.sources
                 listOf(Key(entry.series, amount, sources), Key("", amount, sources)).forEach { key ->
                     samples.getOrPut(key) { mutableListOf() }.let { if (it.size < 30) it += elapsed }

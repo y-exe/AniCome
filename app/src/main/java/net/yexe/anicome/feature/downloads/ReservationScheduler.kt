@@ -57,7 +57,7 @@ class ReservationScheduler(private val index: ReservationIndex, private val queu
     }
     suspend fun submit(request: ReservationSpec): String = withContext(Dispatchers.IO) { mutex.withLock {
         val spec = if (request.estimatedBytes > 0) request else request.copy(estimatedBytes = estimateBytes(request).coerceIn(0L, MAX_DOWNLOAD_ESTIMATE))
-        require(spec.episode.series.isNotBlank() && spec.episode.series.length <= 300 && spec.episode.number in 0..9999 && spec.sources.isNotEmpty() && spec.amount in 0..20 && spec.estimatedBytes in 0..MAX_DOWNLOAD_ESTIMATE)
+        require(spec.episode.series.isNotBlank() && spec.episode.series.length <= 300 && spec.episode.number in 0..9999 && spec.sources.isNotEmpty() && spec.amount >= 0 && spec.maxComments >= 0 && spec.estimatedBytes in 0..MAX_DOWNLOAD_ESTIMATE)
         spec.input()
         val rows = index.all()
         rows.firstOrNull { it.name == spec.name && it.pending }?.let { return@withLock it.id }

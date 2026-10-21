@@ -32,7 +32,8 @@ open class DownloadWorker(context: Context, params: WorkerParameters) : Coroutin
         if (!app.setupCompleted.value) return ReservationOutcome.retry()
         return try {
             val started = android.os.SystemClock.elapsedRealtime()
-            val amount = inputData.getInt("amount", 0).takeIf { it in 1..20 } ?: app.commentAmount.value
+            val amount = inputData.getInt("amount", 0).takeIf { it >= 1 } ?: app.commentAmount.value
+            val maximum = inputData.getInt("maxComments", app.effectiveCommentLimit).coerceAtLeast(0)
             val estimator = DownloadProgressEstimator()
             val downloadedNew = java.util.concurrent.atomic.AtomicBoolean(false)
             var lastProgress = 0L
@@ -50,12 +51,12 @@ open class DownloadWorker(context: Context, params: WorkerParameters) : Coroutin
             val displayEpisode = Episode(series, metadata?.episode?.number ?: number)
             val selected = inputData.getStringArray("sources")?.mapNotNull { runCatching { PlaybackSource.valueOf(it) }.getOrNull() }?.toSet() ?: OfflineSources
             val koin = org.koin.core.context.GlobalContext.get()
-            val archive = if (reviewedId != null) koin.get<CommentRepository>().cached(Episode(series, number), amount) else null
+            val archive = if (reviewedId != null) koin.get<CommentRepository>().cached(Episode(series, number), amount, maximum) else null
             val reuseReview = canReuseReviewedArchive(archive, reviewedId, metadata?.episode ?: Episode(series, number), subtitle)
             val candidate = if (reuseReview) null else reviewedId?.let { Comments.sourceMetadata(it) } ?: channel?.let { koin.get<ChannelCommentRepository>().episode(it, number) }
             if (reuseReview) channel = null
             val savingRepository = if (automatic(origin)) OfflineCommentRepository(koin.get<CommentRepository>().forPlayback(koin.get<AutoCommentCacheRepository>().store), koin.get()) else koin.get<OfflineCommentRepository>()
-            val saved = savingRepository.save(Episode(series, number), searchEpisode = metadata?.episode ?: Episode(series, number), candidate = candidate, amount = amount, subtitle = subtitle, channel = channel, selected = selected, onFetched = { if (it.isNotEmpty()) downloadedNew.set(true) }, progress = { label, current, target ->
+            val saved = savingRepository.save(Episode(series, number), searchEpisode = metadata?.episode ?: Episode(series, number), candidate = candidate, amount = amount, maxComments = maximum, subtitle = subtitle, channel = channel, selected = selected, onFetched = { if (it.isNotEmpty()) downloadedNew.set(true) }, progress = { label, current, target ->
                 val now = android.os.SystemClock.elapsedRealtime()
                 val remaining = estimator.remaining(label, current, target, now)
                 if (now - lastProgress >= 500 || current == target) {
@@ -83,7 +84,7 @@ open class DownloadWorker(context: Context, params: WorkerParameters) : Coroutin
         fun name(episode: Episode, origin: String = "manual") = (if (automatic(origin)) "cache-comments-" else "comments-") + CommentStore.fileKey(episode.key)
         fun enqueue(context: Context, episode: Episode, origin: String = "manual", catalog: AnimeInfo? = null, channel: Long? = null, wifiOverride: Boolean? = null, charging: Boolean = false, sources: Set<PlaybackSource> = OfflineSources, reviewed: SaveEpisodeReview? = null) {
             val wifi = wifiOverride ?: (context.aniComeApp.wifiOnly.value && origin != "playback")
-            org.koin.core.context.GlobalContext.get().get<DownloadRepository>().submit(ReservationSpec(episode.copy(series = episode.series.take(300)), origin, catalog, channel, wifi, charging, sources, reviewed, amount = context.aniComeApp.commentAmount.value))
+            org.koin.core.context.GlobalContext.get().get<DownloadRepository>().submit(ReservationSpec(episode.copy(series = episode.series.take(300)), origin, catalog, channel, wifi, charging, sources, reviewed, amount = context.aniComeApp.commentAmount.value, maxComments = context.aniComeApp.effectiveCommentLimit))
         }
         fun enqueueLegacy(context: Context, spec: ReservationSpec) {
             val request = OneTimeWorkRequestBuilder<DownloadWorker>().setInputData(spec.input()).setConstraints(Constraints.Builder().setRequiresCharging(spec.charging).setRequiredNetworkType(if (spec.wifi) NetworkType.UNMETERED else NetworkType.CONNECTED).build())

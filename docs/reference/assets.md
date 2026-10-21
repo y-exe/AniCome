@@ -17,6 +17,7 @@
 - [DMM TV](https://play.google.com/store/apps/details?id=com.dmm.premium&hl=ja)
 - [Netflix](https://play.google.com/store/apps/details?id=com.netflix.mediaclient&hl=ja)
 - [Prime Video](https://play.google.com/store/apps/details?id=com.amazon.avod.thirdpartyclient&hl=ja)
+- [Hulu](https://play.google.com/store/apps/details?id=jp.happyon.android&hl=ja)
 - [U-NEXT](https://play.google.com/store/apps/details?id=jp.unext.mediaplayer&hl=ja)
 - [ABEMA](https://play.google.com/store/apps/details?id=tv.abema&hl=ja)
 - [dアニメストア](https://play.google.com/store/apps/details?id=com.nttdocomo.android.danimeapp&hl=ja)

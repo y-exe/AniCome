@@ -41,7 +41,7 @@ class ArchiveIntegrityRepository(private val store: CommentStore, private val of
             for (source in known) {
                 if (niconicoVideoId(source.id) == null || source.source !in setOf(PlaybackSource.OFFICIAL, PlaybackSource.DANIME, PlaybackSource.COMMENT_ONLY, PlaybackSource.VIDEO)) continue
                 val amount = maxOf(info.amount, source.amount)
-                val archived = cached(source.id, amount)?.takeIf { saved -> saved.info.amount >= amount && niconicoVideoId(saved.info.sourceId) == niconicoVideoId(source.id) && saved.comments.size in 1..200000 && saved.comments.all { it.at in 0..86_400_000L && it.body.isNotBlank() && it.body.length <= 16000 } && source.source.name in saved.info.sources.split(",") }
+                val archived = cached(source.id, amount)?.takeIf { saved -> saved.info.amount >= amount && niconicoVideoId(saved.info.sourceId) == niconicoVideoId(source.id) && saved.comments.size in 1..Int.MAX_VALUE && saved.comments.all { it.at in 0..86_400_000L && it.body.isNotBlank() && it.body.length <= 16000 } && source.source.name in saved.info.sources.split(",") }
                 val slot = if (archived != null) PlaybackCommentSlot(source.id, archived.info.sourceTitle, source.source, archived.comments, true, archived.durationMs, amount = archived.info.amount)
                 else {
                     check(Comments.availableAmount(amount) >= amount) { "元の取得量で修復するにはニコニコへのログインが必要です" }

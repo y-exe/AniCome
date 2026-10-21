@@ -22,7 +22,7 @@ enum class PlaybackSource(val label: String, val settingKey: String?) {
 }
 fun Candidate.isDownloadOfficial() = isNiconicoChannel() && channelId != DANIME_CHANNEL && !isCommentOnly()
 fun Candidate.isCommentOnly() = tags?.contains(Regex("コメント専用動画|SZBH方式", RegexOption.IGNORE_CASE)) == true
-data class PlaybackCommentSlot(val id: String, val title: String, val source: PlaybackSource, val comments: List<Comment>, val fromArchive: Boolean = false, val durationMs: Long = 0, val sync: CommentSync = CommentSync.UNKNOWN, val syncOffset: Long = 0L, val syncSpans: List<CommentTimeSpan> = emptyList(), val amount: Int = 1)
+data class PlaybackCommentSlot(val id: String, val title: String, val source: PlaybackSource, val comments: List<Comment>, val fromArchive: Boolean = false, val durationMs: Long = 0, val sync: CommentSync = CommentSync.UNKNOWN, val syncOffset: Long = 0L, val syncSpans: List<CommentTimeSpan> = emptyList(), val amount: Int = 1, val countLimit: Int = 0)
 data class PlaybackComments(val slots: List<PlaybackCommentSlot>, val syncReports: List<Pair<PlaybackSource, CommentSync>> = slots.filter { it.source != PlaybackSource.OFFICIAL }.map { it.source to it.sync }.distinct()) {
     val comments = slots.flatMap { it.comments }.sortedBy { it.at }
     val title = slots.firstOrNull()?.title.orEmpty()
@@ -142,34 +142,36 @@ class PlaybackSourceRepository(
     private val videoSearch: suspend (String) -> List<Candidate> = Comments::search,
     private val videoLoad: suspend (String, Int) -> List<Comment> = Comments::load,
     private val detailedVideoLoad: (suspend (String, Int, (Int, Int) -> Unit) -> List<Comment>)? = null,
+    private val countVideoLoad: suspend (String, Int, Int, (Int, Int) -> Unit) -> List<Comment> = Comments::loadToCount,
 ) {
-    fun forOfficial(repository: CommentRepository) = PlaybackSourceRepository(repository, api, settings, videoSearch, videoLoad, detailedVideoLoad)
+    fun forOfficial(repository: CommentRepository) = PlaybackSourceRepository(repository, api, settings, videoSearch, videoLoad, detailedVideoLoad, countVideoLoad)
     val targets = settings.data.map { val p = SettingsSnapshot(it); Triple(AdvancedSettings.from(p).sourceTargets, p.getBoolean("autoCommentSync", true), p.getBoolean("syncOnlyConfirmed", true)) }.distinctUntilChanged()
     private var directories: List<String> = emptyList()
     private var directoryTime = 0L
     private val permits = Semaphore(3)
     private val missing = MissingSourceBackoff()
     fun clearMissing() { missing.clear(); official.clearMissing() }
-    private suspend fun loadVideo(id: String, amount: Int, progress: (Int, Int) -> Unit): List<Comment> = detailedVideoLoad?.invoke(id, amount, progress) ?: videoLoad(id, amount)
+    private suspend fun loadVideo(id: String, amount: Int, maxComments: Int = 0, progress: (Int, Int) -> Unit): List<Comment> = if (maxComments > 0) countVideoLoad(id, amount, maxComments, progress) else detailedVideoLoad?.invoke(id, amount, progress) ?: videoLoad(id, amount)
     private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
     private suspend fun <T> attempt(trace: (String) -> Unit, block: suspend () -> T): T? = try { block() } catch (e: CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e } catch (e: Exception) { trace(e.message.orEmpty().take(160)); null }
-    suspend fun obtain(episode: Episode, duration: Long, searchTitle: String, amount: Int, trace: (String) -> Unit, progress: (String, Int, Int) -> Unit, offlineSave: Boolean = false, requestedSources: Set<PlaybackSource>? = null, searchEpisode: Episode = episode, skipOfficial: Boolean = false, refresh: Boolean = false, onPartial: (PlaybackComments) -> Unit = {}): PlaybackComments = withContext(Dispatchers.IO) {
+    suspend fun obtain(episode: Episode, duration: Long, searchTitle: String, amount: Int, trace: (String) -> Unit, progress: (String, Int, Int) -> Unit, offlineSave: Boolean = false, requestedSources: Set<PlaybackSource>? = null, searchEpisode: Episode = episode, skipOfficial: Boolean = false, refresh: Boolean = false, maxComments: Int = 0, onPartial: (PlaybackComments) -> Unit = {}): PlaybackComments = withContext(Dispatchers.IO) {
         supervisorScope {
             val prefs = settings.load()
             val saved = if (offlineSave) official.store.read(episode) else official.store.readForPlayback(episode)
             val selected = requestedSources ?: (PlaybackSource.entries.filter { it.settingKey != null && (offlineSave || prefs.getBoolean(it.settingKey!!, it in DefaultCommentSources)) }.toSet() + if (saved?.slots?.any { it.source == PlaybackSource.VIDEO } == true) setOf(PlaybackSource.VIDEO) else emptySet())
-            val archived = saved?.slots?.ifEmpty { listOf(PlaybackCommentSlot(saved.info.sourceId, saved.info.sourceTitle, PlaybackSource.OFFICIAL, saved.comments, true, durationMs = saved.durationMs, amount = saved.info.amount)) }.orEmpty()
-                .filter { it.source in selected && (it.source in setOf(PlaybackSource.JIKKYO, PlaybackSource.LIVE_ARCHIVE) || it.amount >= Comments.availableAmount(amount)) }
+            val completeCountCache = maxComments > 0 && saved != null && saved.countLimit >= maxComments && saved.slots.map { it.source }.toSet() == selected
+            val archived = saved?.slots?.ifEmpty { listOf(PlaybackCommentSlot(saved.info.sourceId, saved.info.sourceTitle, PlaybackSource.OFFICIAL, saved.comments, true, durationMs = saved.durationMs, amount = saved.info.amount, countLimit = saved.countLimit)) }.orEmpty()
+                .filter { it.source in selected && (if (maxComments > 0) completeCountCache || it.comments.size >= maxComments || it.countLimit >= maxComments else it.countLimit == 0 && (it.source in setOf(PlaybackSource.JIKKYO, PlaybackSource.LIVE_ARCHIVE) || it.amount >= Comments.availableAmount(amount))) }
             val slots = archived.associateByTo(linkedMapOf()) { it.id }
             fun has(kind: PlaybackSource) = archived.any { it.source == kind } && archived.none { it.source == kind && saved?.isIncompleteSource(it.id) == true }
             val missingKey = "${searchEpisode.key}:$duration"
             val throttle = !offlineSave && !refresh
             fun enabled(kind: PlaybackSource) = kind in selected && (refresh || !has(kind)) && (!throttle || !missing.blocked(missingKey, kind))
             fun synchronized(): PlaybackComments {
-                if (offlineSave) return PlaybackComments(slots.values.toList())
+                if (offlineSave) return PlaybackComments(slots.values.toList()).limited(maxComments)
                 val all = synchronizeCommentSlots(slots.values.toList(), duration * 1000, prefs.getBoolean("autoCommentSync", true), false)
                 return PlaybackComments(if (prefs.getBoolean("syncOnlyConfirmed", true)) all.filter { it.sync.confirmed } else all,
-                    all.filter { it.source != PlaybackSource.OFFICIAL }.map { it.source to it.sync }.distinct())
+                    all.filter { it.source != PlaybackSource.OFFICIAL }.map { it.source to it.sync }.distinct()).limited(maxComments)
             }
             val slotMutex = kotlinx.coroutines.sync.Mutex()
             suspend fun publish(slot: PlaybackCommentSlot?) {
@@ -186,8 +188,8 @@ class PlaybackSourceRepository(
             if (archived.isNotEmpty() && !offlineSave) onPartial(synchronized())
             val officialJob = async {
                 if (!skipOfficial && enabled(PlaybackSource.OFFICIAL)) attempt(trace) {
-                    official.obtain(episode, duration = duration, searchTitle = searchTitle, amount = amount, trace = trace, progress = progress)
-                        .also { publish(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, it.fromArchive, it.durationMs, amount = it.info.amount)) }
+                    official.obtain(episode, duration = duration, searchTitle = searchTitle, amount = amount, trace = trace, progress = progress, maxComments = maxComments)
+                        .also { publish(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, it.fromArchive, it.durationMs, amount = it.info.amount, countLimit = it.countLimit)) }
                 } else null
             }
             val videoJob = async {
@@ -211,20 +213,20 @@ class PlaybackSourceRepository(
                     if (kind == PlaybackSource.OFFICIAL) {
                         val saved = officialJob.await()
                         if (saved != null && items.any { it.id == saved.info.sourceId }) {
-                            publish(PlaybackCommentSlot(saved.info.sourceId, saved.info.sourceTitle, kind, saved.comments, saved.fromArchive, items.first { it.id == saved.info.sourceId }.duration * 1000, amount = saved.info.amount))
+                            publish(PlaybackCommentSlot(saved.info.sourceId, saved.info.sourceTitle, kind, saved.comments, saved.fromArchive, items.first { it.id == saved.info.sourceId }.duration * 1000, amount = saved.info.amount, countLimit = saved.countLimit))
                             return@async
                         }
                     }
                     permits.withPermit { attempt(trace) {
                         var fromArchive = true
                         val parts = items.map { item ->
-                            val archived = if (refresh) null else official.store.readSource(item.id)?.takeIf { it.info.amount >= Comments.availableAmount(amount) }
+                            val archived = if (refresh) null else official.store.readSource(item.id)?.takeIf { it.satisfiesCommentTarget(amount, maxComments) }
                             if (archived == null) fromArchive = false
-                            val comments = archived?.comments ?: loadVideo(item.id, amount) { current, target -> progress("${kind.label}：コメントを取得中", current, target.coerceAtLeast(current)) }
+                            val comments = archived?.comments ?: loadVideo(item.id, amount, maxComments) { current, target -> progress("${kind.label}：コメントを取得中", current, target.coerceAtLeast(current)) }
                             val actualDuration = Comments.knownSource(item.id)?.duration?.takeIf { it > 0 } ?: item.duration
                             actualDuration to comments
                         }
-                        publish(PlaybackCommentSlot(if (kind == PlaybackSource.CHAPTER) "chapters:${items.joinToString(",") { it.id }}" else items.first().id, items.first().title, kind, if (kind == PlaybackSource.CHAPTER) joinChapterComments(parts) else parts.first().second, fromArchive, parts.sumOf { it.first } * 1000, amount = Comments.availableAmount(amount)))
+                        publish(PlaybackCommentSlot(if (kind == PlaybackSource.CHAPTER) "chapters:${items.joinToString(",") { it.id }}" else items.first().id, items.first().title, kind, if (kind == PlaybackSource.CHAPTER) joinChapterComments(parts) else parts.first().second, fromArchive, parts.sumOf { it.first } * 1000, amount = Comments.availableAmount(amount), countLimit = maxComments))
                     } }
                 } }.awaitAll()
             }
@@ -234,33 +236,33 @@ class PlaybackSourceRepository(
             catch (e: TrafficLimitReached) {
                 listOf(officialJob, videoJob, jikkyoJob, liveJob).forEach { it.cancel() }
                 listOf(officialJob, videoJob, jikkyoJob, liveJob).joinAll()
-                if (slots.isNotEmpty() && (offlineSave || official.store.isAutomaticCache)) official.store.saveSources(episode, slots.values.toList(), selected)
+                if (slots.isNotEmpty() && (offlineSave || official.store.isAutomaticCache)) official.store.saveSources(episode, limitCommentSlots(slots.values.toList(), maxComments), selected, maxComments = maxComments)
                 throw e
             }
-            if ((offlineSave || official.store.isAutomaticCache) && slots.isNotEmpty() && (!official.store.isAutomaticCache || slots.values.any { !it.fromArchive })) official.store.saveSources(episode, slots.values.toList(), selected)
+            if ((offlineSave || official.store.isAutomaticCache) && slots.isNotEmpty() && (!official.store.isAutomaticCache || slots.values.any { !it.fromArchive })) official.store.saveSources(episode, limitCommentSlots(slots.values.toList(), maxComments), selected, maxComments = maxComments)
             val result = synchronized()
             if (result.comments.isEmpty()) throw MatchUnavailable(if (slots.isNotEmpty()) "同期に必要な情報がありません。取得元の同期設定を確認してください" else "一致するコメントがありません。取得元・作品名・話数を確認してください")
             progress("取得完了", result.comments.size, result.comments.size)
             result
         }
     }
-    suspend fun cached(episode: Episode, duration: Long): PlaybackComments? = withContext(Dispatchers.IO) {
+    suspend fun cached(episode: Episode, duration: Long, maxComments: Int = 0): PlaybackComments? = withContext(Dispatchers.IO) {
         val saved = official.store.readForPlayback(episode) ?: return@withContext null
         val prefs = settings.load()
         val raw = saved.slots.ifEmpty { listOf(PlaybackCommentSlot(saved.info.sourceId, saved.info.sourceTitle, PlaybackSource.OFFICIAL, saved.comments, true, saved.durationMs)) }
             .filter { slot -> slot.source.settingKey?.let { key -> prefs.getBoolean(key, slot.source in DefaultCommentSources) } ?: true }
         val all = synchronizeCommentSlots(raw, duration, prefs.getBoolean("autoCommentSync", true), false)
         PlaybackComments(if (prefs.getBoolean("syncOnlyConfirmed", true)) all.filter { it.sync.confirmed } else all,
-            all.filter { it.source != PlaybackSource.OFFICIAL }.map { it.source to it.sync }.distinct()).takeIf { it.comments.isNotEmpty() }
+            all.filter { it.source != PlaybackSource.OFFICIAL }.map { it.source to it.sync }.distinct()).limited(maxComments).takeIf { it.comments.isNotEmpty() }
     }
-    suspend fun manual(episode: Episode, candidate: Candidate, amount: Int, progress: (String, Int, Int) -> Unit): PlaybackComments = withContext(Dispatchers.IO) {
-        val cached = official.store.readSource(candidate.id)
-        progress(if (cached != null) "保存済みコメントを使用" else "コメントを取得中", cached?.comments?.size ?: 0, cached?.comments?.size ?: (Comments.availableAmount(amount) * 1000))
-        val comments = cached?.comments ?: loadVideo(candidate.id, amount) { current, target -> progress("コメントを取得中", current, target.coerceAtLeast(current)) }
+    suspend fun manual(episode: Episode, candidate: Candidate, amount: Int, maxComments: Int = 0, progress: (String, Int, Int) -> Unit): PlaybackComments = withContext(Dispatchers.IO) {
+        val cached = official.store.readSource(candidate.id)?.takeIf { it.satisfiesCommentTarget(amount, maxComments) }?.limited(maxComments)
+        progress(if (cached != null) "保存済みコメントを使用" else "コメントを取得中", cached?.comments?.size ?: 0, cached?.comments?.size ?: (if (maxComments > 0) maxComments else commentTarget(Comments.availableAmount(amount))))
+        val comments = cached?.comments ?: loadVideo(candidate.id, amount, maxComments) { current, target -> progress("コメントを取得中", current, target.coerceAtLeast(current)) }
         val source = Comments.knownSource(candidate.id) ?: candidate
-        val slot = PlaybackCommentSlot(source.id, source.title, when { source.channelId == DANIME_CHANNEL -> PlaybackSource.DANIME; source.isCommentOnly() -> PlaybackSource.COMMENT_ONLY; source.isDownloadOfficial() -> PlaybackSource.OFFICIAL; else -> PlaybackSource.VIDEO }, comments, cached != null, source.duration * 1000, if (source.isDownloadOfficial()) CommentSync.NATIVE else CommentSync.UNKNOWN, amount = cached?.info?.amount ?: Comments.availableAmount(amount))
+        val slot = PlaybackCommentSlot(source.id, source.title, when { source.channelId == DANIME_CHANNEL -> PlaybackSource.DANIME; source.isCommentOnly() -> PlaybackSource.COMMENT_ONLY; source.isDownloadOfficial() -> PlaybackSource.OFFICIAL; else -> PlaybackSource.VIDEO }, comments, cached != null, source.duration * 1000, if (source.isDownloadOfficial()) CommentSync.NATIVE else CommentSync.UNKNOWN, amount = cached?.info?.amount ?: Comments.availableAmount(amount), countLimit = maxComments)
         if (cached == null) {
-            if (source.isDownloadOfficial()) official.store.save(episode, source, comments, Comments.availableAmount(amount))
+            if (source.isDownloadOfficial()) official.store.save(episode, source, comments, Comments.availableAmount(amount), countLimit = maxComments)
             else official.store.saveSources(episode, listOf(slot))
         }
         PlaybackComments(listOf(slot)).also { progress(if (cached != null) "保存済みコメントを使用" else "取得完了", comments.size, comments.size) }

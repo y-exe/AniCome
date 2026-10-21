@@ -29,8 +29,8 @@ class ManualCommentViewModel(private val controller: AppCoordinator, private val
             mutable.update { it.copy(loadingId = candidate.id, error = "") }
             try {
                 controller.busy.value = true
-                val saved = playbackSources?.manual(Episode(series.trim(), episode), candidate, controller.commentAmount.value) { label, current, target -> controller.fetchProgress.value = FetchProgress(label, current, target) }
-                    ?: controller.repository.obtain(Episode(series.trim(), episode), source = candidate, amount = controller.commentAmount.value).let { PlaybackComments(listOf(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, it.fromArchive))) }
+                val saved = playbackSources?.manual(Episode(series.trim(), episode), candidate, controller.commentAmount.value, controller.effectiveCommentLimit) { label, current, target -> controller.fetchProgress.value = FetchProgress(label, current, target) }
+                    ?: controller.repository.obtain(Episode(series.trim(), episode), source = candidate, amount = controller.commentAmount.value, maxComments = controller.effectiveCommentLimit).let { PlaybackComments(listOf(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, it.fromArchive))) }
                 if (saved.slots.all { it.fromArchive }) controller.recordArchiveUse(Episode(series.trim(), episode), saved)
                 Session.commentSyncReports.value = saved.syncReports
                 Session.commentsFromArchive.value = saved.fromArchive

@@ -1,4 +1,4 @@
 <resources>
     <string name="bandai_title_accessibility_label">AniCome: detección de títulos</string>
-    <string name="bandai_title_accessibility_description">Lee títulos, episodios y tiempos de reproducción de Bandai Channel, Prime Video y d Anime Store para sincronizar comentarios. No controla la pantalla ni hace capturas.</string>
+    <string name="bandai_title_accessibility_description">Lee títulos, episodios y tiempos de reproducción de Bandai Channel, Prime Video, d Anime Store y Hulu para sincronizar comentarios. No controla la pantalla ni hace capturas.</string>
 </resources>

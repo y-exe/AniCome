@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">AniCome</string>
     <string name="bandai_title_accessibility_label">AniCome：作品名の取得</string>
-    <string name="bandai_title_accessibility_description">バンダイチャンネル・Prime Video・dアニメの再生画面から作品名・話数・再生時刻を読み取り、コメントを同期します。操作の代行や画面の撮影は行いません。</string>
+    <string name="bandai_title_accessibility_description">バンダイチャンネル・Prime Video・dアニメ・Huluの再生画面から作品名・話数・再生時刻を読み取り、コメントを同期します。操作の代行や画面の撮影は行いません。</string>
 </resources>

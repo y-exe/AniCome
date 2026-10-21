@@ -8,12 +8,13 @@ import java.util.concurrent.TimeUnit
 
 data class ReservationSpec(val episode: Episode, val origin: String = "manual", val catalog: AnimeInfo? = null, val channel: Long? = null,
     val wifi: Boolean = true, val charging: Boolean = false, val sources: Set<PlaybackSource> = OfflineSources, val reviewed: SaveEpisodeReview? = null,
-    val amount: Int = 0, val estimatedBytes: Long = 0L) {
+    val amount: Int = 0, val estimatedBytes: Long = 0L, val maxComments: Int = 0) {
     val name get() = DownloadWorker.name(episode, origin)
     fun tags() = buildSet {
         add(DownloadWorker.TAG); add(origin); add("series:${episode.series}"); add("episode:${episode.number}"); add("label:${episode.label.take(300)}")
         add("sources:${sources.map { it.name }.sorted().joinToString(",")}")
         if (amount > 0) add("amount:$amount")
+        if (maxComments > 0) add("maxComments:$maxComments")
         if (estimatedBytes > 0) add("estimatedBytes:$estimatedBytes")
         channel?.let { add("channel:$it") }
         catalog?.let { work -> add("catalog:${work.provider}:${work.id}:${work.year ?: 0}:${work.episodes ?: 0}"); if (work.imageUrl.isNotBlank()) add("artwork:${work.imageUrl}") }
@@ -22,7 +23,7 @@ data class ReservationSpec(val episode: Episode, val origin: String = "manual", 
     fun input() = workDataOf("series" to episode.series, "number" to episode.number, "origin" to origin,
         "catalogId" to (catalog?.id ?: 0), "catalogProvider" to catalog?.provider.orEmpty(), "catalogYear" to (catalog?.year ?: 0), "catalogEpisodes" to (catalog?.episodes ?: 0),
         "channelId" to (channel ?: 0L), "sources" to sources.map { it.name }.sorted().toTypedArray(), "reviewed" to (reviewed != null),
-        "reviewVideo" to reviewed?.candidate?.id.orEmpty(), "reviewSeries" to reviewed?.searchEpisode?.series.orEmpty(), "reviewNumber" to (reviewed?.searchEpisode?.number ?: episode.number), "reviewSubtitle" to reviewed?.subtitle.orEmpty(), "amount" to amount, "estimatedBytes" to estimatedBytes)
+        "reviewVideo" to reviewed?.candidate?.id.orEmpty(), "reviewSeries" to reviewed?.searchEpisode?.series.orEmpty(), "reviewNumber" to (reviewed?.searchEpisode?.number ?: episode.number), "reviewSubtitle" to reviewed?.subtitle.orEmpty(), "amount" to amount, "estimatedBytes" to estimatedBytes, "maxComments" to maxComments)
     fun request(id: UUID, reservation: String) = OneTimeWorkRequestBuilder<DownloadWorker>().setId(id).setInputData(input())
         .setConstraints(Constraints.Builder().setRequiresCharging(charging).setRequiredNetworkType(if (wifi) NetworkType.UNMETERED else NetworkType.CONNECTED).build())
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).apply { tags().forEach(::addTag); addTag("managed-reservation:$reservation") }.build()
@@ -41,9 +42,11 @@ data class ReservationSpec(val episode: Episode, val origin: String = "manual", 
             val origin = listOf("manual", "playback", "notification", "prefetch").firstOrNull { it in tags } ?: "manual"
             val sources = tags.firstOrNull { it.startsWith("sources:") }?.removePrefix("sources:")?.split(",")?.mapNotNull { name -> PlaybackSource.entries.find { it.name == name } }?.toSet() ?: OfflineSources
             val amount = tags.firstOrNull { it.startsWith("amount:") }?.removePrefix("amount:")?.toIntOrNull() ?: 0
+            val maximum = tags.firstOrNull { it.startsWith("maxComments:") }?.removePrefix("maxComments:")?.toIntOrNull() ?: 0
+            require(maximum >= 0)
             val bytes = tags.firstOrNull { it.startsWith("estimatedBytes:") }?.removePrefix("estimatedBytes:")?.toLongOrNull() ?: 0L
-            require(amount in 0..20 && bytes in 0..MAX_DOWNLOAD_ESTIMATE)
-            return ReservationSpec(episode, origin, reservationCatalog(tags, episode), tags.firstOrNull { it.startsWith("channel:") }?.removePrefix("channel:")?.toLongOrNull(), wifi, charging, sources, reservationReview(tags), amount, bytes)
+            require(amount >= 0 && bytes in 0..MAX_DOWNLOAD_ESTIMATE)
+            return ReservationSpec(episode, origin, reservationCatalog(tags, episode), tags.firstOrNull { it.startsWith("channel:") }?.removePrefix("channel:")?.toLongOrNull(), wifi, charging, sources, reservationReview(tags), amount, bytes, maximum)
         }
     }
 }
