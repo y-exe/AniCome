@@ -15,6 +15,7 @@ data class LicenseState(val text: String = "", val loading: Boolean = false, val
 
 data class OssNotice(val name: String, val license: String, val file: String)
 val OssNotices = listOf(
+    OssNotice("bangumi-data", "CC BY 4.0 · bangumi-data contributors", "bangumi-data.txt"),
     OssNotice("Chiron GoRound TC", "SIL Open Font License 1.1 · Chiron GoRound TC Project Authors", "Chiron-GoRound.txt"),
     OssNotice("Jua", "SIL Open Font License 1.1 · Jua Project Authors", "Jua.txt"),
     OssNotice("Kosugi Maru", "Apache License 2.0 · The Kosugi Maru Project Authors", "Kosugi-Maru.txt"),

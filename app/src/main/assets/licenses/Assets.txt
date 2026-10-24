@@ -40,3 +40,12 @@ https://bocchi.rocks/tv/assets/img/page/top/announce2nd/ph_mv.jpg
 https://yurucamp.jp/third/assets/img/top/visual_sp.jpg
 https://www.tbs.co.jp/anime/machikado/img/ogp3.png
 Artwork belongs to the respective rights holders. The GPL license for the application code does not apply to this artwork.
+
+
+Anime channel metadata: bangumi-data
+https://github.com/bangumi-data/bangumi-data
+CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+Channel mappings are filtered and cached locally.
+
+Additional anime channel links: しょぼいカレンダー
+https://cal.syoboi.jp/

@@ -326,6 +326,23 @@
   })));
   window.addEventListener('unhandledrejection', e => report('error', String(e.reason?.stack || e.reason || 'Unhandled promise rejection')));
   window.commentOverlay = {
+    setViewport(bounds) {
+      const root = document.documentElement;
+      const measured = () => {
+        const rect = document.getElementById('commentViewport').getBoundingClientRect();
+        report('viewport', JSON.stringify({left:rect.left,top:rect.top,width:rect.width,height:rect.height,screenWidth:innerWidth,screenHeight:innerHeight}));
+      };
+      if (!bounds || !['left','top','width','height'].every(key => Number.isFinite(bounds[key])) ||
+          bounds.left < 0 || bounds.top < 0 || bounds.width <= 0 || bounds.height <= 0 ||
+          bounds.left + bounds.width > 1.001 || bounds.top + bounds.height > 1.001) {
+        root.removeAttribute('data-video-viewport');
+        measured();
+        return;
+      }
+      for (const key of ['left','top','width','height']) root.style.setProperty('--video-' + key, bounds[key] * 100 + '%');
+      root.setAttribute('data-video-viewport','');
+      measured();
+    },
     beginUpdate(token, options) { loadSerial++; incoming = { token, options, comments: [] }; },
     pushUpdate(token, comments) { if (incoming?.token === token) incoming.comments.push(...comments); },
     commitUpdate(token) { if (incoming?.token !== token) return; const update = incoming; incoming = null; return this.load(update.comments, update.options); },

@@ -91,13 +91,13 @@ class ConvenienceRepository(private val context: Context, private val settings: 
         val key = stringPreferencesKey("serviceProfile:$service")
         val current = CommentDisplayProfile.read(p)
         val saved = p[key]?.let(CommentDisplayProfile::parse)
-        if (!profileReady && enabled && saved != null && saved != current) {
-            settings.edit { latest -> if (SettingsSnapshot(latest).getString("activeService", app.activeService.value.name) == service) saved.write(latest) }
+        if (!profileReady && enabled && saved != null && (saved.position != current.position || saved.customY != current.customY)) {
+            settings.edit { latest -> if (SettingsSnapshot(latest).getString("activeService", app.activeService.value.name) == service) saved.writePosition(latest) }
             return
         }
         profileReady = true
         val epoch = snapshot.getLong("serviceProfileEpoch", 0L)
-        if (enabled && (!profilesEnabled || profileService != service || profileEpoch != epoch)) current.publish(app)
+        if (enabled && (!profilesEnabled || profileService != service || profileEpoch != epoch)) current.publishPosition()
         profileEpoch = epoch
         profilesEnabled = enabled; profileService = service
         if (enabled && saved != current) settings.edit { latest ->
@@ -112,7 +112,7 @@ class ConvenienceRepository(private val context: Context, private val settings: 
             if (s.getBoolean("serviceProfiles", true) && old != service.name) {
                 p[longPreferencesKey("serviceProfileEpoch")] = s.getLong("serviceProfileEpoch", 0L) + 1
                 p[stringPreferencesKey("serviceProfile:$old")] = CommentDisplayProfile.read(p).json()
-                (p[stringPreferencesKey("serviceProfile:${service.name}")]?.let(CommentDisplayProfile::parse) ?: defaultServiceProfile(service)).write(p)
+                (p[stringPreferencesKey("serviceProfile:${service.name}")]?.let(CommentDisplayProfile::parse) ?: defaultServiceProfile(service)).writePosition(p)
                 p[stringPreferencesKey("serviceProfile:${service.name}")] = CommentDisplayProfile.read(p).json()
             }
             p[stringPreferencesKey("activeService")] = service.name
@@ -137,7 +137,7 @@ class ConvenienceRepository(private val context: Context, private val settings: 
         try {
             val wanted = animeWorkIdentity(ep.series)
             val remembered = SettingsSnapshot(settings.store.data.first()).getString("selectedWork:${CommentStore.fileKey(ep.series)}", "")!!
-            val selected = runCatching { JSONObject(remembered).let { j -> AnimeInfo(j.getInt("id"), j.getString("title"), j.optString("image"), "", null, j.optInt("year").takeIf { it > 0 }, j.optInt("episodes").takeIf { it > 0 }, emptyList(), j.getString("provider")) } }.getOrNull()
+            val selected = runCatching { JSONObject(remembered).let { j -> AnimeInfo(j.getInt("id"), j.getString("title"), j.optString("image"), "", null, j.optInt("year").takeIf { it > 0 }, j.optInt("episodes").takeIf { it > 0 }, emptyList(), j.getString("provider"), j.optString("niconicoChannel").takeIf(String::isNotBlank)) } }.getOrNull()
             val works = if (selected != null) listOf(selected) else AnimeCatalog.search(ep.series).filter { animeWorkIdentity(it.title).let { it.base == wanted.base && it.season == wanted.season && it.cour == wanted.cour } }
             val work = works.singleOrNull() ?: return
             val total = work.episodes ?: return
@@ -158,7 +158,7 @@ class ConvenienceRepository(private val context: Context, private val settings: 
             if (value) {
                 p[longPreferencesKey("serviceProfileEpoch")] = SettingsSnapshot(p).getLong("serviceProfileEpoch", 0L) + 1
                 val profileKey = stringPreferencesKey("serviceProfile:$service")
-                (p[profileKey]?.let(CommentDisplayProfile::parse) ?: CommentDisplayProfile.read(p)).also { it.write(p); p[profileKey] = it.json() }
+                (p[profileKey]?.let(CommentDisplayProfile::parse) ?: CommentDisplayProfile.read(p)).also { it.writePosition(p); p[profileKey] = it.json() }
             }
             p[booleanPreferencesKey(key)] = value
         }
@@ -252,7 +252,7 @@ class ConvenienceRepository(private val context: Context, private val settings: 
     fun undo(id: Long) { pending.remove(id)?.cancel(); if (undo.value?.id == id) undo.value = null; Session.message.value = "操作を取り消しました" }
     fun retryFailed(works: List<WorkInfo>) { works.filter { it.state == WorkInfo.State.FAILED }.forEach(downloads::retry) }
     fun completeOffline(episodes: List<SavedEpisode>) { episodes.forEach { item ->
-        val selected = runCatching { JSONObject(SettingsSnapshot(prefs.value).getString("selectedWork:${CommentStore.fileKey(item.episode.series)}", "")!!).let { j -> AnimeInfo(j.getInt("id"), j.getString("title"), j.optString("image"), "", null, j.optInt("year").takeIf { it > 0 }, j.optInt("episodes").takeIf { it > 0 }, emptyList(), j.getString("provider")) } }.getOrNull()
+        val selected = runCatching { JSONObject(SettingsSnapshot(prefs.value).getString("selectedWork:${CommentStore.fileKey(item.episode.series)}", "")!!).let { j -> AnimeInfo(j.getInt("id"), j.getString("title"), j.optString("image"), "", null, j.optInt("year").takeIf { it > 0 }, j.optInt("episodes").takeIf { it > 0 }, emptyList(), j.getString("provider"), j.optString("niconicoChannel").takeIf(String::isNotBlank)) } }.getOrNull()
         val missing = missingOfflineSources(item)
         if (missing.isNotEmpty()) downloads.enqueue(item.episode, selected, channel = SettingsSnapshot(prefs.value).getLong("workChannel:${CommentStore.fileKey(item.episode.series)}", 0L).takeIf { it > 0L }, sources = missing)
     }; Session.message.value = if (episodes.any { missingOfflineSources(it).isNotEmpty() }) "不足している取得元を保存予約しました" else "すべての取得元が保存済みです" }

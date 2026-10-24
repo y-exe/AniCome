@@ -75,6 +75,38 @@ class CommentPreviewTest {
             kotlinx.coroutines.Dispatchers.resetMain()
         }
     }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun previewCountSurvivesReopeningAndIgnoresInvalidSavedValues() = runTest {
+        kotlinx.coroutines.Dispatchers.setMain(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler))
+        val models = mutableListOf<CommentPreviewViewModel>()
+        try {
+            val store = MemoryPreferences()
+            val settings = SettingsRepository(store, backgroundScope)
+            val repository = CommentPreviewRepository { error("No sample needed") }
+            val first = CommentPreviewViewModel(repository, settings).also(models::add)
+            runCurrent()
+            assertEquals(5000, first.limit.value)
+            first.count(20000)
+            runCurrent()
+            first.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
+            val reopened = CommentPreviewViewModel(repository, SettingsRepository(store, backgroundScope)).also(models::add)
+            runCurrent()
+            assertEquals(20000, reopened.limit.value)
+            settings.putInt("previewCommentCount", -1)
+            runCurrent()
+            val invalid = CommentPreviewViewModel(repository, settings).also(models::add)
+            runCurrent()
+            assertEquals(5000, invalid.limit.value)
+            val immediate = CommentPreviewViewModel(repository, settings).also(models::add)
+            immediate.count(10000)
+            runCurrent()
+            assertEquals(10000, immediate.limit.value)
+            assertEquals(10000, settings.load().getInt("previewCommentCount", 0))
+        } finally {
+            models.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+            kotlinx.coroutines.Dispatchers.resetMain()
+        }
+    }
     @Test fun legacyFixedCommentHidingIsIgnoredInProfilesAndRemovedOnWrite() {
         val expected = CommentDisplayProfile(size = 22f, position = "top")
         val legacy = org.json.JSONObject(expected.json()).put("flowOnly", true).put("hideOnOwnApp", true)

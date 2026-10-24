@@ -20,13 +20,16 @@ class BandaiTitleAccessibilityService : AccessibilityService() {
     private val prime: PrimePlaybackRepository by inject()
     private val danime: DanimePlaybackRepository by inject()
     private val hulu: HuluPlaybackRepository by inject()
+    private val viewports: PlayerViewportRepository by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sampling: Job? = null
     private var huluSampling: Job? = null
     private var huluReadMs = 0L
+    private var viewportSampling: Job? = null
 
     override fun dump(fd: java.io.FileDescriptor, writer: java.io.PrintWriter, args: Array<out String>?) {
         writer.println("huluSampling=${huluSampling?.isActive} stage=${HuluAccessibilityReader.stage} lastReadMs=$huluReadMs")
+        writer.println("viewport=${viewports.state.value}")
     }
 
     override fun onServiceConnected() {
@@ -45,6 +48,7 @@ class BandaiTitleAccessibilityService : AccessibilityService() {
     }
 
     private fun readPlayback() {
+        if (viewportSampling?.isActive != true) viewportSampling = scope.launch { readViewport() }
         if (aniComeApp.activeService.value == StreamingService.HULU) {
             if (huluSampling?.isActive != true) huluSampling = scope.launch { readHulu() }
         } else { huluSampling?.cancel(); hulu.clear() }
@@ -53,6 +57,28 @@ class BandaiTitleAccessibilityService : AccessibilityService() {
             prime.clear()
             readTitle()
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private suspend fun readViewport() {
+        val service = aniComeApp.activeService.value
+        val manager = getSystemService(android.view.WindowManager::class.java)
+        val size = if (android.os.Build.VERSION.SDK_INT >= 30) manager.maximumWindowMetrics.bounds.let { it.width() to it.height() }
+            else android.util.DisplayMetrics().also { manager.defaultDisplay.getRealMetrics(it) }.let { it.widthPixels to it.heightPixels }
+        if (size.first <= size.second) { viewports.clear(); return }
+        try {
+            val result = withContext(Dispatchers.Default) {
+                val roots = windows.mapNotNull { it.root }.toMutableList()
+                if (roots.isEmpty()) rootInActiveWindow?.let(roots::add)
+                try { roots.filter { it.packageName?.toString() == service.packageName && it.isVisibleToUser }
+                    .firstNotNullOfOrNull { PlayerViewportReader.read(it, size.first, size.second) } }
+                finally { roots.forEach { it.recycle() } }
+            }
+            if (aniComeApp.activeService.value == service) {
+                if (result != null) viewports.observe(service, size.first, size.second, result.first, result.second) else viewports.clear()
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { }
     }
 
     @Suppress("DEPRECATION")
@@ -131,6 +157,7 @@ class BandaiTitleAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        viewports.clear()
         titles.setEnabled(false)
         prime.clear()
         danime.clear()

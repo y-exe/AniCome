@@ -16,6 +16,7 @@ class SaveCommentRepository(
     private val reviews: SaveReviewRepository = SaveReviewRepository(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val onSearch: suspend (String, Int) -> Unit = { _, _ -> },
+    private val channelCatalog: AnimeChannelRepository? = null,
 ) {
     val selectedSources: Flow<Set<PlaybackSource>> = settings?.data?.map { p ->
         val value = SettingsSnapshot(p).getString("saveCommentSources", null)
@@ -23,8 +24,32 @@ class SaveCommentRepository(
     } ?: flowOf(DefaultCommentSources)
     fun rememberSources(value: Set<PlaybackSource>) { settings?.putString("saveCommentSources", value.joinToString(",") { it.name }) }
     suspend fun search(query: String): List<AnimeInfo> {
-        val works = trackedSearch(query, record = { value, count, _ -> onSearch(value, count) }) { catalogSearch(query) }.map { metadata?.canonical(it) ?: it }
+        val works = trackedSearch(query, record = { value, count, _ -> onSearch(value, count) }) {
+            val registered = channelCatalog?.search(query).orEmpty()
+            val external = try { catalogSearch(query) }
+                catch (e: CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e }
+                catch (e: Exception) { if (registered.isEmpty()) throw e else emptyList() }
+            val direct = registered.map { entry ->
+                val identity = animeWorkIdentity(entry.title)
+                val extra = external.singleOrNull { other ->
+                    val candidate = animeWorkIdentity(other.title)
+                    identity.base == candidate.base && identity.season == candidate.season && identity.cour == candidate.cour &&
+                        (entry.year == null || other.year == null || entry.year == other.year)
+                }
+                if (extra == null) entry else extra.copy(title = entry.title, niconicoChannel = entry.niconicoChannel)
+            }
+            if (direct.isNotEmpty()) direct else external.map { metadata?.canonical(it) ?: it }
+        }
         return works.map { work -> if (works.count { it.title == work.title } > 1 && work.year != null) work.copy(title = "${work.title} (${work.year})") else work }
+    }
+    suspend fun prepareSelection(work: AnimeInfo): AnimeInfo {
+        if (work.niconicoChannel == null || work.episodes != null || channels == null) return work
+        val described = metadata?.withEpisodeCount(work) ?: work
+        if (described.episodes != null) return described
+        val listed = try { channels.input(work.niconicoChannel) }
+            catch (e: CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e } catch (_: Exception) { return described }
+        if (animeWorkIdentity(work.title).cour > 1) return described
+        return described.copy(episodes = listed.numbers.maxOrNull(), imageUrl = work.imageUrl.ifBlank { listed.videos.firstOrNull()?.thumbnailUrl.orEmpty() })
     }
     suspend fun channel(value: String, work: AnimeInfo? = null): ChannelAnime {
         val result = checkNotNull(channels).input(value)
@@ -43,7 +68,7 @@ class SaveCommentRepository(
     suspend fun review(work: AnimeInfo, episodes: List<Episode>, sources: Set<PlaybackSource>, channel: Long?, progress: (Int, Int) -> Unit): SaveReview =
         settings?.load().let { prefs ->
             val amount = prefs?.getInt("commentAmount", 5)?.coerceAtLeast(1) ?: 1
-            val maximum = if (prefs?.getBoolean("commentCountMode", false) == true) prefs.getInt("commentCountLimit", 5000).coerceAtLeast(1) else 0
+            val maximum = if (prefs?.getBoolean("commentCountMode", true) == true) prefs.getInt("commentCountLimit", 7000).coerceAtLeast(1) else 0
             reviews.prepare(work, episodes, sources, channel, if (maximum > 0) ((maximum.toLong() + 999) / 1000).toInt() else amount, progress).copy(amount = amount, maxComments = maximum)
         }
     suspend fun rememberedChannel(work: AnimeInfo): Long? = settings?.load()?.getLong("workChannel:${CommentStore.fileKey(work.title)}", 0L)?.takeIf { it > 0L }
@@ -52,11 +77,11 @@ class SaveCommentRepository(
         require(sources.isNotEmpty())
         require(duplicateReviewVideoIds(reviewed.filter { it.episode in episodes }).isEmpty()) { DuplicateReviewMessage }
         if (work != null && channel != null) settings?.putLong("workChannel:${CommentStore.fileKey(work.title)}", channel)
-        if (work != null) settings?.putString("selectedWork:${CommentStore.fileKey(work.title)}", org.json.JSONObject().put("id", work.id).put("title", work.title).put("image", work.imageUrl).put("year", work.year ?: 0).put("episodes", work.episodes ?: 0).put("provider", work.provider).toString())
+        if (work != null) settings?.putString("selectedWork:${CommentStore.fileKey(work.title)}", org.json.JSONObject().put("id", work.id).put("title", work.title).put("image", work.imageUrl).put("year", work.year ?: 0).put("episodes", work.episodes ?: 0).put("provider", work.provider).put("niconicoChannel", work.niconicoChannel).toString())
         val preferences = settings?.load()
         val wifi = preferences?.getBoolean("wifiOnly", true) ?: true
         val amount = requestedAmount?.coerceAtLeast(1) ?: preferences?.getInt("commentAmount", 5)?.coerceAtLeast(1) ?: 1
-        val maximum = requestedMaximum ?: if (preferences?.getBoolean("commentCountMode", false) == true) preferences.getInt("commentCountLimit", 5000).coerceAtLeast(1) else 0
+        val maximum = requestedMaximum ?: if (preferences?.getBoolean("commentCountMode", true) == true) preferences.getInt("commentCountLimit", 7000).coerceAtLeast(1) else 0
         episodes.forEach { ensureActive(); if (downloads != null) downloads.reserve(ReservationSpec(it, catalog = work, channel = channel, sources = sources, wifi = wifi, reviewed = reviewed.firstOrNull { row -> row.episode == it }, amount = amount, estimatedBytes = estimatedBytes, maxComments = maximum)) else if (work == null) reserve(it) else reserveSelected(it, work) } }
 }
 data class SaveCommentState(
@@ -103,9 +128,10 @@ class SaveCommentViewModel(private val repository: SaveCommentRepository) : View
         mutable.update { it.copy(query = work.title, work = work, results = emptyList(), searched = false, loading = false, failure = false, error = "", episode = "1", channel = null, rememberedChannel = null, restoringChannel = true) }
         channelJob = viewModelScope.launch {
             try {
-                val stored = repository.rememberedChannel(work)
+                val prepared = repository.prepareSelection(work)
+                val stored = repository.rememberedChannel(prepared)
                 ensureActive()
-                mutable.update { if (it.selected == work) it.copy(rememberedChannel = stored, restoringChannel = false) else it }
+                mutable.update { if (it.selected == work) it.copy(work = prepared, rememberedChannel = stored, restoringChannel = false) else it }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { mutable.update { if (it.selected == work) it.copy(restoringChannel = false, error = "チャンネル指定を読み込めませんでした") else it } }
         }

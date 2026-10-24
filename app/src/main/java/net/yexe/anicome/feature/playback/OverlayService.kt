@@ -40,7 +40,7 @@ open class OverlayService : Service() {
         if (layer == null) {
             try {
                 Diagnostics.renderer.value = "描画ページ読み込み中"
-                val view = CommentWebView(this)
+                val view = CommentWebView(this, viewport = getKoin().get())
                 val params = WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                     PixelFormat.TRANSLUCENT)

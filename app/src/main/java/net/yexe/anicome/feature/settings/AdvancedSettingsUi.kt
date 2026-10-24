@@ -66,15 +66,16 @@ val LocalStorageModel = staticCompositionLocalOf<StorageViewModel?> { null }
     }
 }
 
-@Composable fun CommentPositionSettings(model: AdvancedSettingsViewModel) {
+@Composable fun CommentPositionSettings(model: AdvancedSettingsViewModel, serviceSettings: @Composable () -> Unit = {}) {
     val state by model.state.collectAsStateWithLifecycle()
-    CommentPositionContent(state.position, model::position, state.customY, model::customPosition)
+    CommentPositionContent(state.position, model::position, state.customY, model::customPosition, serviceSettings)
 }
 
-@Composable internal fun CommentPositionContent(position: String, change: (String) -> Unit, customY: Float = 1f, changeCustomY: (Float) -> Unit = {}) {
+@Composable internal fun CommentPositionContent(position: String, change: (String) -> Unit, customY: Float = 1f, changeCustomY: (Float) -> Unit = {}, serviceSettings: @Composable () -> Unit = {}) {
     var localY by remember(customY) { mutableFloatStateOf(customY) }
     SettingsCard {
     AppText("表示する位置", style = MaterialTheme.typography.titleMedium)
+    serviceSettings()
     AppText("縦画面では動画の位置に合わせて選んでください。横画面にも適用します。", style = MaterialTheme.typography.bodyMedium)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("top" to "上", "center" to "中央", "custom" to "カスタム").forEach { (value, label) ->

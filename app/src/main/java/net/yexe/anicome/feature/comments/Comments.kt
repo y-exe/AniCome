@@ -34,6 +34,10 @@ object Comments {
         NiconicoLogin.recordViewer(session, watch)
         parseNiconicoSource(id, watch).also { sourceCache[id] = it; sourceCache[it.id] = it }
     }
+    suspend fun refreshSourceMetadata(input: String): Candidate {
+        niconicoVideoId(input)?.let(sourceCache::remove)
+        return sourceMetadata(input)
+    }
     const val MAX_AMOUNT = Int.MAX_VALUE
 
      

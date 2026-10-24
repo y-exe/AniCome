@@ -9,12 +9,15 @@ data class VideoReplacementState(val item: SavedEpisode? = null, val target: Epi
     val candidates: List<Candidate> = emptyList(), val selected: Candidate? = null, val searching: Boolean = false, val saving: Boolean = false,
     val completed: Boolean = false, val error: String = "")
 class VideoReplacementRepository(private val comments: CommentRepository, private val resolve: suspend (SavedEpisode) -> ResolvedEpisodeMetadata? = { null },
-    private val metadata: suspend (String) -> Candidate = Comments::sourceMetadata, private val changed: suspend () -> Unit = {}) {
+    private val metadata: suspend (String) -> Candidate = Comments::sourceMetadata, private val changed: suspend () -> Unit = {},
+    private val remembered: (Episode, Candidate) -> Unit = { _, _ -> }) {
     suspend fun target(item: SavedEpisode) = resolve(item) ?: ResolvedEpisodeMetadata("", item.episode)
     suspend fun search(query: String, target: Episode? = null) = comments.searchCandidates(query, target).filter(Candidate::isDownloadOfficial).distinctBy { it.id }
     suspend fun replace(item: SavedEpisode, candidate: Candidate, target: Episode, subtitle: String) {
         val actual = metadata(candidate.id)
         comments.replaceOfficial(item, actual, target, subtitle)
+        remembered(item.episode, actual)
+        if (item.episode != target) remembered(target, actual)
         changed()
     }
 }

@@ -29,6 +29,12 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Check release notes
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          test -f "docs/releases/$RELEASE_VERSION.md"
+          test -s "docs/releases/$RELEASE_VERSION.md"
       - name: Commit version with GitHub signature
         id: version
         env:
@@ -113,6 +119,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: apk-*
@@ -132,7 +141,7 @@ jobs:
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release upload "v$VERSION" ./*.apk SHA256SUMS --clobber
             gh api --method PATCH "repos/$GH_REPO/git/refs/tags/v$VERSION" -f sha="$RELEASE_SHA" -F force=true
-            gh release edit "v$VERSION" --target "$RELEASE_SHA" --title "AniCome v$VERSION" --prerelease="$PRERELEASE"
+            gh release edit "v$VERSION" --target "$RELEASE_SHA" --title "v$VERSION" --notes-file "docs/releases/$VERSION.md" --prerelease="$PRERELEASE"
           else
-            gh release create "v$VERSION" ./*.apk SHA256SUMS --target "$RELEASE_SHA" --title "AniCome v$VERSION" --generate-notes "${flags[@]}"
+            gh release create "v$VERSION" ./*.apk SHA256SUMS --target "$RELEASE_SHA" --title "v$VERSION" --notes-file "docs/releases/$VERSION.md" "${flags[@]}"
           fi

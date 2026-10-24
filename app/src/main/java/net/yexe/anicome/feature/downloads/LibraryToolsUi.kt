@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     val complete = all.count { it.state == WorkInfo.State.SUCCEEDED }
     val failure = all.count { it.state == WorkInfo.State.FAILED }
     val total = all.size
+    val artwork = rememberArtwork(title)
     val picture = all.firstNotNullOfOrNull { work -> work.tags.firstOrNull { it.startsWith("artwork:") }?.removePrefix("artwork:") }.orEmpty()
     val running = all.count { it.state == WorkInfo.State.RUNNING }
     val paused = all.count(::reservationPaused)
@@ -31,7 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             if (paused > 0) AppText("一時停止中：${paused}件")
             if (estimatedBytes > 0) AppText("保存容量の目安：%.1f MB".format(estimatedBytes / 1048576.0))
         } },
-            leadingContent = { AnimeArtwork(null, Modifier.width(56.dp).height(64.dp), title, imageOverride = picture) },
+            leadingContent = { AnimeArtwork(artwork, Modifier.width(56.dp).height(64.dp), title, imageOverride = picture) },
             trailingContent = { IconButton({ expanded = !expanded }) { AppIcon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, "保存予約の詳細") } }, modifier = Modifier.motionClickable { expanded = !expanded })
         LinearProgressIndicator(progress = { if (total == 0) 0f else complete.toFloat() / total }, modifier = Modifier.fillMaxWidth())
         if (expanded) {

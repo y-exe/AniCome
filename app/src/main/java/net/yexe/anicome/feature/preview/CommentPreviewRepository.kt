@@ -53,7 +53,7 @@ class CommentPreviewRepository(private val cache: PreviewCommentCache? = null, p
 }
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
-class CommentPreviewViewModel(private val repository: CommentPreviewRepository, settingsRepository: SettingsRepository) : ViewModel() {
+class CommentPreviewViewModel(private val repository: CommentPreviewRepository, private val settingsRepository: SettingsRepository) : ViewModel() {
     val settings = settingsRepository.data.map(::previewDisplaySettings).stateIn(viewModelScope, SharingStarted.Eagerly, null)
     private val mutableLoad = MutableStateFlow(PreviewLoadState(loading = true))
     val load = mutableLoad.asStateFlow()
@@ -62,11 +62,14 @@ class CommentPreviewViewModel(private val repository: CommentPreviewRepository, 
     val playback = MutableStateFlow(PreviewPlayback())
     val limit = MutableStateFlow(5000)
     private val revision = MutableStateFlow(0)
+    private var countSelected = false
     init {
         repository.preparation?.let { source -> viewModelScope.launch { source.collect { progress ->
             if (progress.loading) mutableLoad.update { it.copy(loading = true, current = progress.current, target = progress.target) }
         } } }
         viewModelScope.launch {
+            val savedCount = settingsRepository.load().getInt("previewCommentCount", 5000)
+            if (!countSelected) limit.value = savedCount.takeIf { it in PreviewCommentCounts } ?: 5000
             combine(limit, revision) { count, _ -> count }.collectLatest { count ->
                 mutableLoad.update { it.copy(loading = true, error = "") }
                 try {
@@ -79,5 +82,10 @@ class CommentPreviewViewModel(private val repository: CommentPreviewRepository, 
         }
     }
     fun fetch() { revision.update { it + 1 } }
-    fun count(value: Int) { require(value in PreviewCommentCounts); limit.value = value }
+    fun count(value: Int) {
+        require(value in PreviewCommentCounts)
+        countSelected = true
+        limit.value = value
+        settingsRepository.putInt("previewCommentCount", value)
+    }
 }

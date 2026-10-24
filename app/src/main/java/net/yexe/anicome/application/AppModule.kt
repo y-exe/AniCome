@@ -18,6 +18,7 @@ val appModule = module {
     single { PrimePlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
     single { DanimePlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
     single { HuluPlaybackRepository { android.os.SystemClock.elapsedRealtime() } }
+    single { PlayerViewportRepository { android.os.SystemClock.elapsedRealtime() } }
     single { NetflixEpisodeRepository(get(), Comments::search, archives = {
         withContext(Dispatchers.IO) {
             (get<CommentStore>().list() + get<AutoCommentCacheRepository>().store.ownList()).distinctBy { it.sourceId }
@@ -43,17 +44,25 @@ val appModule = module {
     single<SavedEpisodeIndex> { RoomEpisodeIndex(get()) }
     single { CommentStore(File(androidContext().filesDir, "comments"), capacity = { storageLimitBytes(get<SettingsRepository>().storageLimitMb) }, index = get(), onSaved = { before, after -> get<CommentHistoryRepository>().saved(before, after, "manual") }) }
     single { AutoCommentCacheRepository(androidContext(), get(), get(), get<LibraryDatabase>().cachedEpisodes(), get(), get()) }
-    single { CommentRepository(get(), reuse = get<AutoCommentCacheRepository>().store, detailedLoad = { input, amount, progress -> Comments.load(input, amount, progress) }, onSearch = { query, count, episode -> get<CommentHistoryRepository>().search("VIDEO_SEARCH", query, count, episode) }) }
+    single { CommentRepository(get(), reuse = get<AutoCommentCacheRepository>().store, detailedLoad = { input, amount, progress -> Comments.load(input, amount, progress) }, onSearch = { query, count, episode -> get<CommentHistoryRepository>().search("VIDEO_SEARCH", query, count, episode) }, officialLookup = { episode ->
+        get<OfficialEpisodeRepository>().candidates(episode)
+    }) }
     single { PlaybackSourceRepository(get<CommentRepository>().forPlayback(get<AutoCommentCacheRepository>().store), get(), get(), detailedVideoLoad = { id, amount, progress -> Comments.load(id, amount, progress) }) }
     single { VideoReplacementRepository(get(), resolve = { item ->
         val text = get<SettingsRepository>().load().getString("selectedWork:${CommentStore.fileKey(item.episode.series)}", "")
-        val work = runCatching { org.json.JSONObject(text!!).let { j -> AnimeInfo(j.getInt("id"), j.getString("title"), "", "", null, j.optInt("year").takeIf { it > 0 }, j.optInt("episodes").takeIf { it > 0 }, emptyList(), j.getString("provider")) } }.getOrNull()
+        val work = runCatching { org.json.JSONObject(text!!).let { j -> AnimeInfo(j.getInt("id"), j.getString("title"), "", "", null, j.optInt("year").takeIf { it > 0 }, j.optInt("episodes").takeIf { it > 0 }, emptyList(), j.getString("provider"), j.optString("niconicoChannel").takeIf(String::isNotBlank)) } }.getOrNull()
         work?.let { get<EpisodeMetadataRepository>().resolve(it, item.episode.number) }
-    }, changed = { get<AppCoordinator>().refreshLibrary(); get<AppCoordinator>().retryCurrent() }) }
+    }, changed = { get<AppCoordinator>().refreshLibrary(); get<AppCoordinator>().retryCurrent() },
+        remembered = { episode, candidate -> get<ConvenienceRepository>().rememberCandidate(episode, candidate) }) }
     single { OfflineCommentRepository(get(), get<PlaybackSourceRepository>().forOfficial(get())) }
     single { ArchiveIntegrityRepository(get(), get(), cached = { id, amount -> get<CommentRepository>().cachedSource(id, amount) }, changed = { get<AppCoordinator>().refreshLibrary(); get<AppCoordinator>().retryCurrent() }) }
     single { ChannelCommentRepository(get()) }
-    single { SaveReviewRepository(resolve = { work, number -> get<EpisodeMetadataRepository>().resolve(work, number) },
+    single { OfficialEpisodeRepository(get(), channel = { work -> get<AnimeChannelRepository>().official(work) },
+        byTitle = { title -> get<AnimeChannelRepository>().official(title) }, videos = { id -> get<ChannelCommentRepository>().load(id).videos },
+        resolve = { work, number -> get<EpisodeMetadataRepository>().resolve(work, number) }) }
+    single { AnimeChannelRepository(File(androidContext().filesDir, "metadata/bangumi-channels.json"),
+        request = { url -> get<ApiClient>().request(url) }, resolveId = { value -> get<ChannelCommentRepository>().resolveId(value) }) }
+    single { SaveReviewRepository(officialChannel = { work -> get<AnimeChannelRepository>().official(work) }, resolve = { work, number -> get<EpisodeMetadataRepository>().resolve(work, number) },
         candidates = { episode, subtitle ->
             val archived = get<CommentStore>().readForPlayback(episode)
             if (archived != null && "OFFICIAL" in archived.info.sources.split(",")) listOf(Comments.sourceMetadata(archived.info.sourceId))
@@ -66,9 +75,9 @@ val appModule = module {
                     items.map { it.bytes / it.amount.coerceAtLeast(1) / it.sources.split(",").size.coerceAtLeast(1) }.sorted().let { if (it.isEmpty()) 1_048_576L else it[it.size / 2] })
             }
         }) }
-    single { SaveCommentRepository(get(), metadata = get(), channels = get(), settings = get(), reviews = get(), onSearch = { query, count -> get<CommentHistoryRepository>().search("WORK_SEARCH", query, count) }) }
+    single { SaveCommentRepository(get(), metadata = get(), channels = get(), settings = get(), reviews = get(), channelCatalog = get(), onSearch = { query, count -> get<CommentHistoryRepository>().search("WORK_SEARCH", query, count) }) }
     single { EpisodeMetadataRepository(get(), request = { url, body -> get<ApiClient>().request(url, body) }) }
-    single { AppCoordinator(androidContext(), get(), get(), get(), get(), get(), get()) }
+    single { AppCoordinator(androidContext(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConvenienceRepository(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { CommentNotifications(androidContext(), get(), get(), get()) }
     single { FloatingPanelRepository(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
@@ -91,7 +100,8 @@ val appModule = module {
     viewModel { AppLockViewModel(get()) }
     viewModel { UpdatesViewModel(get()) }
     viewModel { StorageViewModel(get()) }
-    viewModel { ArtworkViewModel() }
+    single { VideoThumbnailRepository(get()) }
+    viewModel { ArtworkViewModel(get()) }
     viewModel { AnimeSearchViewModel { query -> trackedSearch(query, record = { value, count, _ -> get<CommentHistoryRepository>().search("WORK_SEARCH", value, count) }) { AnimeCatalog.search(query) } } }
     viewModel { CommentHistoryViewModel(get()) }
     viewModel { ArchiveIntegrityViewModel(get()) }

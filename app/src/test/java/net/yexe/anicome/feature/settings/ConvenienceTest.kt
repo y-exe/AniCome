@@ -29,7 +29,7 @@ class ConvenienceTest {
         assertTrue(portableKey("panelCompact"))
         validatePortableSetting("panelCompact", JSONObject().put("type", "boolean").put("value", true))
     }
-    @Test fun viewingAppProfilesRestoreAllCommentDisplayFieldsWithoutMixingApps() = runTest {
+    @Test fun viewingAppProfilesRestoreOnlyPositionAndKeepSharedSettings() = runTest {
         val context = ContextWrapper(null)
         val settings = SettingsRepository(MemoryPreferences(), backgroundScope)
         val app = AppCoordinator(settings = settings, scope = backgroundScope)
@@ -39,23 +39,27 @@ class ConvenienceTest {
         app.setActiveService(StreamingService.NETFLIX)
         repo.boolean("serviceProfiles", true)
         runCurrent()
+        settings.putString("overlayPosition", "custom"); settings.putFloat("overlayCustomY", .31f)
         app.setCommentSize(21f); app.setCommentAmount(10); app.setFps(144)
         settings.putBoolean("hideOnOwnApp", false); repo.renderMode("quality")
         runCurrent()
         runCurrent()
         app.setActiveService(StreamingService.ABEMA); runCurrent()
-        assertEquals(14f, Session.size.value)
-        assertEquals(5, app.commentAmount.value)
-        assertEquals(60, Session.fps.value)
+        assertEquals("top", Session.overlayPosition.value)
+        assertEquals(21f, Session.size.value)
+        assertEquals(10, app.commentAmount.value)
+        assertEquals(144, Session.fps.value)
         app.setCommentSize(9f); app.setCommentAmount(2); app.setFps(30)
         settings.putBoolean("hideOnOwnApp", true); repo.renderMode("battery")
         runCurrent()
         runCurrent()
         app.setActiveService(StreamingService.NETFLIX); runCurrent()
-        assertEquals(21f, Session.size.value)
-        assertEquals(10, app.commentAmount.value)
-        assertEquals(144, Session.fps.value)
-        assertEquals("quality", Session.renderMode.value)
+        assertEquals("custom", Session.overlayPosition.value)
+        assertEquals(.31f, Session.customPosition.value)
+        assertEquals(9f, Session.size.value)
+        assertEquals(2, app.commentAmount.value)
+        assertEquals(30, Session.fps.value)
+        assertEquals("battery", Session.renderMode.value)
         assertFalse(portableKey("hideOnOwnApp"))
         app.setActiveService(StreamingService.ABEMA); runCurrent()
         assertEquals(9f, Session.size.value)
@@ -74,23 +78,25 @@ class ConvenienceTest {
         app.setCommentSize(11f)
         app.setActiveService(StreamingService.NETFLIX)
         runCurrent()
-        assertEquals(23f, Session.size.value)
+        assertEquals(11f, Session.size.value)
         assertEquals(.7f, Session.opacity.value)
         app.setActiveService(StreamingService.ABEMA); runCurrent()
         assertEquals(11f, Session.size.value)
-        assertEquals(.75f, Session.opacity.value)
+        assertEquals(.7f, Session.opacity.value)
     }
-    @Test fun anExistingManualProfileIsRestoredOnStartupWithoutLosingItsValues() = runTest {
+    @Test fun anExistingProfileRestoresPositionWithoutOverwritingSharedValues() = runTest {
         val store = MemoryPreferences()
         store.updateData { androidx.datastore.preferences.core.mutablePreferencesOf(
             androidx.datastore.preferences.core.stringPreferencesKey("activeService") to StreamingService.NETFLIX.name,
             androidx.datastore.preferences.core.booleanPreferencesKey("serviceProfiles") to true,
             androidx.datastore.preferences.core.floatPreferencesKey("commentSize") to 9f,
             androidx.datastore.preferences.core.stringPreferencesKey("serviceProfile:NETFLIX") to """{"size":21,"fps":144,"position":"top"}""") }
-        val repo = repository(backgroundScope, SettingsRepository(store, backgroundScope))
+        val settings = SettingsRepository(store, backgroundScope)
+        val repo = repository(backgroundScope, settings)
         repo.start(); runCurrent()
-        assertEquals(21f, Session.size.value)
-        assertEquals(144, Session.fps.value)
+        val restored = settings.load()
+        assertEquals(9f, restored.getFloat("commentSize", 15f))
+        assertEquals(60, restored.getInt("fps", 60))
         assertEquals("top", Session.overlayPosition.value)
     }
     @Test fun filteringAndOffsetsKeepOriginalOfficialAndArtistData() {

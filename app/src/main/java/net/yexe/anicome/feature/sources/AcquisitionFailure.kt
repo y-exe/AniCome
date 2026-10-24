@@ -27,7 +27,7 @@ fun acquisitionFailure(error: Throwable, year: Int? = null): AcquisitionFailure 
         else -> acquisitionFailure(error.message.orEmpty())
     }
 }
-fun acquisitionFailure(message: String): AcquisitionFailure = when {
+fun acquisitionFailure(message: String): AcquisitionFailure = AcquisitionFailure.entries.firstOrNull { message.startsWith(it.label + ":") } ?: when {
     message.contains("通信量の上限") -> AcquisitionFailure.TRAFFIC_LIMIT
     Regex("(?:HTTP[^0-9]*|^)(?:401|403)\\b", RegexOption.IGNORE_CASE).containsMatchIn(message) || message.contains("ログイン") -> AcquisitionFailure.ACCESS
     Regex("(?:HTTP[^0-9]*|^)429\\b", RegexOption.IGNORE_CASE).containsMatchIn(message) -> AcquisitionFailure.RATE_LIMIT

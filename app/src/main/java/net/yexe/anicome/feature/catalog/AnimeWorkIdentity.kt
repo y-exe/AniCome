@@ -29,7 +29,7 @@ fun animeWorkIdentity(value: String): AnimeWorkIdentity {
     text = Regex("(?<=[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}\\s])(?:VIII|VII|VI|IV|III|II|IX|V|X|I)(?=$|[\\s〜~(])").replace(text) {
         season = EpisodeMatcher.romanToNumber(it.value); explicitSeason = true; " "
     }
-    text = Regex("(?<=[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}])([2-9])(?=$|[\\s〜~(])").replace(text) {
+    text = Regex("(?<=[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}!?\\s])([2-9])(?=$|[\\s〜~(])").replace(text) {
         season = it.groupValues[1].toInt(); explicitSeason = true; " "
     }
     text = text.replace(Regex("\\(\\s*\\)"), "").trim()

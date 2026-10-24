@@ -12,7 +12,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @SuppressLint("SetJavaScriptEnabled")
-class CommentWebView(context: Context, private val preview: Boolean = false, private val externalPreview: (() -> PreviewRenderFrame)? = null) : WebView(context) {
+class CommentWebView(context: Context, private val preview: Boolean = false, private val externalPreview: (() -> PreviewRenderFrame)? = null,
+    private val viewport: PlayerViewportRepository? = null) : WebView(context) {
     private val renderScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var loadJob: Job? = null
     private var serializedComments: List<Comment>? = null
@@ -25,6 +26,8 @@ class CommentWebView(context: Context, private val preview: Boolean = false, pri
     private var lastComments: List<Comment>? = null
     private var lastRenderKey = ""
     private var lastPlaybackKey = ""
+    private var lastViewport = ""
+    private val screenLocation = IntArray(2)
     private val previewStart = SystemClock.elapsedRealtime()
     private val sample = (0..9).map { Comment(it * 1000L, "表示テスト • コメントが流れています！") } + Comment(2000, "  /\\_/\\\n (o.o)\n /o  o\\", """{"commands":["ue","gothic","full","@6"],"postedAt":"2017-01-01T00:00:00Z"}""")
     private val tick = object : Runnable {
@@ -37,6 +40,18 @@ class CommentWebView(context: Context, private val preview: Boolean = false, pri
                 }
             }
             if (ready) {
+                if (viewport != null && !preview && externalPreview == null) {
+                    val cutout = if (android.os.Build.VERSION.SDK_INT >= 28) rootWindowInsets?.displayCutout else null
+                    val bounds = viewport.resolve(context.aniComeApp.activeService.value, width, height, cutout?.safeInsetLeft ?: 0, cutout?.safeInsetRight ?: 0)
+                    val coordinates = screenLocation.also(::getLocationOnScreen)
+                    val key = "$bounds:$width:$height:${coordinates[0]}:${coordinates[1]}"
+                    if (key != lastViewport) {
+                        lastViewport = key
+                        val value = bounds?.let { JSONObject().put("left", (it.left - coordinates[0]) / width)
+                            .put("top", (it.top - coordinates[1]) / height).put("width", it.width / width).put("height", it.height / height).toString() } ?: "null"
+                        evaluateJavascript("window.commentOverlay.setViewport($value);", null)
+                    }
+                }
                 val now = SystemClock.elapsedRealtime()
                 val external = externalPreview?.invoke()
                 val testing = preview || external != null || Session.testUntil.value > now
@@ -107,7 +122,7 @@ class CommentWebView(context: Context, private val preview: Boolean = false, pri
                 val canDisplay = enabled
                 evaluateJavascript("window.commentOverlay.sync($adjusted,$speed,$canDisplay);", null)
                 if (!enabled) {
-                    Diagnostics.renderedAt.value = null
+                    Diagnostics.renderedAt.value = null; Diagnostics.renderedObservedAt.value = null
                     Diagnostics.renderer.value = when {
                         ownApp && !testing -> "描画待機: アプリ操作中"
                         advertisement -> "描画待機: 広告中"
@@ -151,7 +166,8 @@ class CommentWebView(context: Context, private val preview: Boolean = false, pri
             @JavascriptInterface fun ready(unused: String) { main.post { ready = true; Diagnostics.renderer.value = "描画ライブラリ準備完了" } }
             @JavascriptInterface fun loaded(count: Int) { main.post { Diagnostics.renderer.value = "描画データ設定済み: ${count}件" } }
             @JavascriptInterface fun error(message: String) { main.post { lastRenderKey = ""; Diagnostics.renderer.value = "描画エラー: ${message.take(200)}"; Diagnostics.trace(Diagnostics.renderer.value) } }
-            @JavascriptInterface fun frame(position: Long) { main.post { Diagnostics.renderedAt.value = position; Diagnostics.renderer.value = "描画処理実行中（画面に見えるかは表示テストで確認）" } }
+            @JavascriptInterface fun frame(position: Long) { main.post { Diagnostics.renderedAt.value = position; Diagnostics.renderedObservedAt.value = android.os.SystemClock.elapsedRealtime(); Diagnostics.renderer.value = "描画処理実行中（画面に見えるかは表示テストで確認）" } }
+            @JavascriptInterface fun viewport(message: String) { main.post { Diagnostics.viewport.value = message } }
         }, "AndroidRenderer")
         loadUrl("file:///android_asset/overlay.html")
         main.post(tick)

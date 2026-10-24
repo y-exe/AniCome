@@ -33,6 +33,20 @@ class EpisodeMetadataRepository(private val settings: SettingsRepository? = null
                 (found.season == wanted.season || (!wanted.explicitSeason && work.year != null)) }
         }
     }
+    suspend fun withEpisodeCount(work: AnimeInfo): AnimeInfo {
+        if (work.episodes != null) return work
+        return try {
+            val items = request("https://cal.syoboi.jp/json.php?Req=TitleSearch&Search=${URLEncoder.encode(animeSearchStem(work.title), "UTF-8")}&Limit=50", null).optJSONObject("Titles")
+            val match = items?.keys()?.asSequence()?.map { items.getJSONObject(it) }?.filter { calendarMatches(work, it) }?.toList()?.singleOrNull()
+            val tid = match?.optInt("TID") ?: return work
+            if (tid <= 0) return work
+            val item = request("https://cal.syoboi.jp/json.php?Req=TitleFull&TID=$tid", null).optJSONObject("Titles")?.optJSONObject(tid.toString()) ?: return work
+            val numbers = item.optString("SubTitles").lineSequence().mapNotNull { line ->
+                Regex("^\\*([0-9]{1,4})\\*.+$").matchEntire(line.trim())?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it > 0 }
+            }.toSet()
+            work.copy(episodes = numbers.size.takeIf { it > 0 })
+        } catch (e: CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e } catch (_: Exception) { work }
+    }
     suspend fun canonical(work: AnimeInfo): AnimeInfo = try {
         val items = request("https://cal.syoboi.jp/json.php?Req=TitleSearch&Search=${URLEncoder.encode(animeSearchStem(work.title), "UTF-8")}&Limit=50", null).optJSONObject("Titles")
         val selected = items?.keys()?.asSequence()?.map { items.getJSONObject(it) }?.filter { calendarMatches(work, it) }?.toList()?.singleOrNull()

@@ -38,7 +38,7 @@ val HomeSettings = listOf(
     val all = HomeSettings + otherSettings(linked, limit)
     val items = if (query.isBlank()) HomeSettings else all.filter { item ->
         val extra = when (item.page) {
-            "コメント表示" -> listOf("FPS", "文字サイズ", "不透明度", "速度", "取得量", "描画フレームレート", "表示位置", "視聴アプリ別", "表示位置", "カスタム", "描画の負荷", "省電力", "バランス", "不透明度", "文字サイズ")
+            "コメント表示" -> listOf("FPS", "文字サイズ", "不透明度", "速度", "取得量", "描画フレームレート", "表示位置", "視聴アプリ別", "表示位置", "カスタム", "不透明度", "文字サイズ")
             "ネットワーク" -> listOf("HTTP", "SOCKS", "proxy", "タイムアウト")
             "セキュリティ" -> listOf("PIN", "パスワード", "指紋", "パターン", "ロック")
             "ダウンロード" -> listOf("バックアップ", "事前保存", "保存容量", "充電", "キャッシュ", "先に保存する話数", "Wi-Fi")
@@ -59,7 +59,7 @@ val HomeSettings = listOf(
     ServiceProfileContent(options.serviceProfiles, service, { model.boolean("serviceProfiles", it) }, app::setActiveService)
 }
 @Composable internal fun ServiceProfileContent(enabled: Boolean, service: StreamingService, change: (Boolean) -> Unit, choose: (StreamingService) -> Unit) {
-    ReferenceGroup {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SwitchRow("視聴アプリ別の設定を使用", enabled, change)
         if (enabled) ServiceSelector(service, choose)
     }

@@ -334,7 +334,8 @@ class PlaybackSourcesTest {
             })
             suspend fun request(offline: Boolean = false) {
                 try { sources.obtain(Episode("作品", 1), 1400, "", 1, {}, { _, _, _ -> }, offlineSave = offline, requestedSources = setOf(PlaybackSource.DANIME)); fail("must be unavailable") }
-                catch (_: MatchUnavailable) { }
+                catch (_: MatchUnavailable) { assertFalse(failure) }
+                catch (_: java.io.IOException) { assertTrue(failure) }
             }
             request(); assertEquals(2, searches)
             request(); assertEquals(2, searches)

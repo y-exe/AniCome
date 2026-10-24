@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -21,13 +23,30 @@ data class AnimeInfo(
     val year: Int?,
     val episodes: Int?,
     val genres: List<String>,
-    val provider: String = "jikan"
+    val provider: String = "jikan",
+    val niconicoChannel: String? = null
 )
+fun artworkSearchQueries(series: String, sourceTitle: String = ""): List<String> {
+    val broad = animeWorkIdentity(series).searchTitle.replace(Regex("[\\p{P}\\p{S}]+"), " ").trim()
+    return (listOf(series, broad) + listOf(series, sourceTitle).filter(String::isNotBlank).flatMap { title ->
+        val parsed = EpisodeMatcher.extract(title)
+        listOfNotNull(parsed.titleStripped, parsed.title, title)
+    }).map(String::trim).filter(String::isNotBlank).distinct().take(4)
+}
+
+fun artworkMatches(series: String, candidate: AnimeInfo): Boolean {
+    if (candidate.imageUrl.isBlank()) return false
+    val wanted = animeWorkIdentity(series)
+    val actual = animeWorkIdentity(candidate.title)
+    return wanted.base == actual.base && wanted.season == actual.season && wanted.cour == actual.cour
+}
+
 data class AnimeEpisode(val number: Int, val title: String, val imageUrl: String = "")
 
  
 object AnimeCatalog {
     private val cache = ConcurrentHashMap<String, AnimeInfo>()
+    private val artworkLocks = ConcurrentHashMap<String, Mutex>()
     private val episodeCache = ConcurrentHashMap<String, AnimeEpisode>()
     private val _featured = MutableStateFlow<List<AnimeInfo>>(emptyList())
     val featured = _featured.asStateFlow()
@@ -64,16 +83,30 @@ object AnimeCatalog {
         result?.let { cache[key] = it; writeInfo(key, it) }
         return result
     }
-    suspend fun artwork(series: String, sourceTitle: String = ""): AnimeInfo? {
-        val queries = listOf(series, sourceTitle).filter(String::isNotBlank).flatMap { title ->
-            val parsed = EpisodeMatcher.extract(title)
-            listOfNotNull(parsed.titleStripped, parsed.title, title)
-        }.map(String::trim).filter(String::isNotBlank).distinct()
+    suspend fun artwork(series: String, sourceTitle: String = ""): AnimeInfo? = withContext(Dispatchers.IO) {
+        artworkLocks.getOrPut(EpisodeMatcher.normalize(series)) { Mutex() }.withLock { loadArtwork(series, sourceTitle) }
+    }
+    private suspend fun loadArtwork(series: String, sourceTitle: String): AnimeInfo? = withContext(Dispatchers.IO) {
+        val key = "artwork-v2:${EpisodeMatcher.normalize(series)}"
+        cache[key]?.takeIf { it.imageUrl.isNotBlank() }?.let { return@withContext it }
+        readInfo(key)?.takeIf { it.imageUrl.isNotBlank() }?.let { return@withContext it.also { cache[key] = it } }
+        val queries = artworkSearchQueries(series, sourceTitle)
         for (query in queries) {
-            kotlinx.coroutines.currentCoroutineContext().ensureActive()
-            find(query)?.takeIf { it.imageUrl.isNotBlank() }?.let { return it }
+            val providers = listOf<suspend () -> List<AnimeInfo>>({ kitsu(query) }, { aniList(query) },
+                { response("anime?q=${URLEncoder.encode(query, "UTF-8")}&limit=8&sfw=true").getJSONArray("data").mapAnime() })
+            for (provider in providers) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val matches = try { provider().filter { artworkMatches(series, it) } }
+                    catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e } catch (_: Exception) { emptyList() }
+                val result = bestMatch(query, matches)
+                if (result != null) {
+                    cache[key] = result
+                    writeInfo(key, result)
+                    return@withContext result
+                }
+            }
         }
-        return null
+        null
     }
     suspend fun loadFeatured() = withContext(Dispatchers.IO) {
         if (_featured.value.isNotEmpty()) return@withContext
@@ -114,10 +147,10 @@ object AnimeCatalog {
     }
     private suspend fun readInfo(key: String): AnimeInfo? = preferences?.load()?.getString("info:$key", null)?.let { raw -> runCatching {
         val item = JSONObject(raw)
-        AnimeInfo(item.getInt("id"), item.getString("title"), item.getString("image"), item.optString("synopsis"), item.optDouble("score").takeIf { !it.isNaN() }, item.optInt("year").takeIf { it > 0 }, item.optInt("episodes").takeIf { it > 0 }, item.optJSONArray("genres")?.let { array -> List(array.length()) { array.getString(it) } }.orEmpty(), item.optString("provider", "jikan"))
+        AnimeInfo(item.getInt("id"), item.getString("title"), item.getString("image"), item.optString("synopsis"), item.optDouble("score").takeIf { !it.isNaN() }, item.optInt("year").takeIf { it > 0 }, item.optInt("episodes").takeIf { it > 0 }, item.optJSONArray("genres")?.let { array -> List(array.length()) { array.getString(it) } }.orEmpty(), item.optString("provider", "jikan"), item.optString("niconicoChannel").takeIf(String::isNotBlank))
     }.getOrNull() }
     private fun writeInfo(key: String, info: AnimeInfo) {
-        preferences?.putString("info:$key", JSONObject().put("id", info.id).put("title", info.title).put("image", info.imageUrl).put("synopsis", info.synopsis).put("score", info.score).put("year", info.year).put("episodes", info.episodes).put("genres", JSONArray(info.genres)).put("provider", info.provider).toString())
+        preferences?.putString("info:$key", JSONObject().put("id", info.id).put("title", info.title).put("image", info.imageUrl).put("synopsis", info.synopsis).put("score", info.score).put("year", info.year).put("episodes", info.episodes).put("genres", JSONArray(info.genres)).put("provider", info.provider).put("niconicoChannel", info.niconicoChannel).toString())
     }
     private suspend fun readEpisode(key: String): AnimeEpisode? = preferences?.load()?.getString("episode:$key", null)?.let { raw -> runCatching { JSONObject(raw).let { AnimeEpisode(it.getInt("number"), it.getString("title"), it.optString("image")) } }.getOrNull() }
     private fun writeEpisode(key: String, episode: AnimeEpisode) { preferences?.putString("episode:$key", JSONObject().put("number", episode.number).put("title", episode.title).put("image", episode.imageUrl).toString()) }

@@ -39,8 +39,8 @@ open class DownloadWorker(context: Context, params: WorkerParameters) : Coroutin
             var lastProgress = 0L
             val catalogId = inputData.getInt("catalogId", 0)
             val provider = inputData.getString("catalogProvider")
-            val catalog = if (catalogId > 0 && provider in setOf("jikan", "kitsu", "anilist")) AnimeInfo(catalogId, series, "", "", null,
-                inputData.getInt("catalogYear", 0).takeIf { it > 0 }, inputData.getInt("catalogEpisodes", 0).takeIf { it > 0 }, emptyList(), provider!!) else null
+            val catalog = if (catalogId > 0 && provider in setOf("jikan", "kitsu", "anilist", "bangumi-data")) AnimeInfo(catalogId, series, "", "", null,
+                inputData.getInt("catalogYear", 0).takeIf { it > 0 }, inputData.getInt("catalogEpisodes", 0).takeIf { it > 0 }, emptyList(), provider!!, inputData.getString("catalogChannel")?.takeIf(String::isNotBlank)) else null
             setProgress(workDataOf("label" to "各話のタイトルを取得中", "downloadElapsedMs" to 0L))
             var channel = inputData.getLong("channelId", 0L).takeIf { it > 0 }
             val reviewedId = inputData.getString("reviewVideo")?.takeIf { niconicoVideoId(it) != null }

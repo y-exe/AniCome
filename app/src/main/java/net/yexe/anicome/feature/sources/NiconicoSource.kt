@@ -22,7 +22,7 @@ fun parseNiconicoSource(inputId: String, response: org.json.JSONObject): Candida
     val title = video.getString("title").trim()
     require(title.isNotEmpty())
     val thumbnail = video.optJSONObject("thumbnail")
-    val image = listOf("largeUrl", "middleUrl", "url").firstNotNullOfOrNull { key -> thumbnail?.optString(key)?.takeIf { it.startsWith("https://") } }.orEmpty()
+    val image = listOf("large", "largeUrl", "middle", "middleUrl", "normal", "url").firstNotNullOfOrNull { key -> thumbnail?.optString(key)?.takeIf { it.startsWith("https://") } }.orEmpty()
     val channel = response.optJSONObject("channel")
     val owner = channel ?: response.optJSONObject("owner")
     val channelId = channel?.optString("id")?.removePrefix("ch")?.toLongOrNull()?.takeIf { it > 0 }

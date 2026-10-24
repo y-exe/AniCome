@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
                 if (row.selected && niconicoVideoId(row.candidate?.id.orEmpty()) in duplicateIds) AppText("他の話と動画が重複しています", color = MaterialTheme.colorScheme.error)
                 if (row.candidate == null) AppText("未確認の取得元は保存時に再検索します", style = MaterialTheme.typography.bodySmall)
             } },
-            leadingContent = { AnimeArtwork(null, Modifier.size(64.dp, 36.dp), row.candidate?.title ?: row.episode.series, imageOverride = row.candidate?.thumbnailUrl.orEmpty()) },
+            leadingContent = { EpisodeArtwork(row.candidate?.id.orEmpty(), row.candidate?.thumbnailUrl.orEmpty(), Modifier.size(64.dp, 36.dp), row.candidate?.title ?: row.episode.series) },
             trailingContent = { Checkbox(row.selected, { select(row.episode, it) }, enabled = !busy) })
     } }
 }

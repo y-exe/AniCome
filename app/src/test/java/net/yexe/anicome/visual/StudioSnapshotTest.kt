@@ -148,7 +148,7 @@ class StudioSnapshotTest(private val variant: String) {
     @Test fun setupLogin() = capture("setup_login") { SetupScreen(true, true, {}, {}, {}, currentStep = 3) }
     @Test fun setup() = capture("setup") { SetupScreen(false, false, {}, {}, {}) }
     @Test fun ngWords() = capture("ngwords") { NgWordsEditor("ネタバレ\n広告", {}) }
-    @Test fun serviceSelection() = capture("services") { ServiceSelectionContent(StreamingService.DMM_TV, {}) }
+    @Test fun serviceSelection() = capture("services") { ServiceSelectionList(StreamingService.DMM_TV, {}, {}) }
     @Test fun storage() = capture("storage") { SettingsScreen("ダウンロード") {} }
     @Test fun oss() = capture("oss") { SettingsScreen("OSSライセンス") {} }
     @Test fun theme() = capture("theme") { SettingsScreen("テーマ") {} }
@@ -263,9 +263,6 @@ class StudioSnapshotTest(private val variant: String) {
         }
         androidx.compose.runtime.DisposableEffect(model) { onDispose { model.viewModelScope.cancel() } }
         return model
-    }
-    @Test fun displayExtras() = capture("display_extras") { app ->
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { CommentDisplayExtras(convenienceModel(app)) }
     }
     @Test fun storageExtras() = capture("storage_extras") { app -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) { StorageExtras(convenienceModel(app)) } }
     @Test fun homeLayout() = capture("home_layout") { app -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) { HomeLayoutSettings(convenienceModel(app)) } }

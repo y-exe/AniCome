@@ -107,10 +107,9 @@ import coil3.request.crossfade
                 "その他" -> SettingsCategoryList(otherSettings(linked, limitMb)) { settings.openPage(it) }
                 "アプリ詳細" -> AboutSettings(::openLink) { settings.openPage("OSSライセンス") }
                 "コメント表示" -> {
-                    ServiceProfileSettings(LocalConvenience.current, app)
                     PreferenceAction("コメントの取得元", "公式・dアニメ・実況・生放送", Icons.Filled.Forum) { settings.openPage("取得元") }
                     CommentPreviewAction()
-                    CommentPositionSettings(advanced)
+                    CommentPositionSettings(advanced) { ServiceProfileSettings(LocalConvenience.current, app) }
                     PreferenceSection("文字と動き")
                     ReferenceGroup {
                     SettingSlider("文字サイズ", "${size.toInt()}", size, 5f..25f, 19, change = settings::setCommentSize)
@@ -125,7 +124,6 @@ import coil3.request.crossfade
                     SettingSlider("描画フレームレート", "$fps fps", fps.toFloat(), 15f..144f, 128) { settings.setFps(it.roundToInt()) }
                     PreferenceHint("実際の描画速度は端末のリフレッシュレートが上限です。")
                     }
-                    CommentDisplayExtras(LocalConvenience.current)
                 }
                 "取得元" -> { AcquisitionSettings(app) { settings.openPage(it) }; CommentSourcesSettings(advanced); CommentSelectionSettings(LocalConvenience.current) }
                 "タイミング" -> { TimingControls(); ManualPlaybackSettings(app) }

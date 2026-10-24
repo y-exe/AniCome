@@ -157,6 +157,10 @@ class PlaybackSourceRepository(
     suspend fun obtain(episode: Episode, duration: Long, searchTitle: String, amount: Int, trace: (String) -> Unit, progress: (String, Int, Int) -> Unit, offlineSave: Boolean = false, requestedSources: Set<PlaybackSource>? = null, searchEpisode: Episode = episode, skipOfficial: Boolean = false, refresh: Boolean = false, maxComments: Int = 0, onPartial: (PlaybackComments) -> Unit = {}): PlaybackComments = withContext(Dispatchers.IO) {
         supervisorScope {
             val prefs = settings.load()
+            val failures = java.util.concurrent.ConcurrentLinkedQueue<Exception>()
+            suspend fun <T> attemptSource(block: suspend () -> T): T? = try { block() }
+                catch (e: CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e }
+                catch (e: Exception) { failures.add(e); trace(e.message.orEmpty().take(160)); null }
             val saved = if (offlineSave) official.store.read(episode) else official.store.readForPlayback(episode)
             val selected = requestedSources ?: (PlaybackSource.entries.filter { it.settingKey != null && (offlineSave || prefs.getBoolean(it.settingKey!!, it in DefaultCommentSources)) }.toSet() + if (saved?.slots?.any { it.source == PlaybackSource.VIDEO } == true) setOf(PlaybackSource.VIDEO) else emptySet())
             val completeCountCache = maxComments > 0 && saved != null && saved.countLimit >= maxComments && saved.slots.map { it.source }.toSet() == selected
@@ -187,21 +191,21 @@ class PlaybackSourceRepository(
             }
             if (archived.isNotEmpty() && !offlineSave) onPartial(synchronized())
             val officialJob = async {
-                if (!skipOfficial && enabled(PlaybackSource.OFFICIAL)) attempt(trace) {
-                    official.obtain(episode, duration = duration, searchTitle = searchTitle, amount = amount, trace = trace, progress = progress, maxComments = maxComments)
+                if (!skipOfficial && enabled(PlaybackSource.OFFICIAL)) attemptSource {
+                    official.obtain(episode, sourceEpisode = searchEpisode, duration = duration, searchTitle = searchTitle, amount = amount, trace = trace, progress = progress, maxComments = maxComments)
                         .also { publish(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, it.fromArchive, it.durationMs, amount = it.info.amount, countLimit = it.countLimit)) }
                 } else null
             }
             val videoJob = async {
                 if (setOf(PlaybackSource.OFFICIAL, PlaybackSource.DANIME, PlaybackSource.CHAPTER, PlaybackSource.COMMENT_ONLY, PlaybackSource.VIDEO).none { enabled(it) && (!skipOfficial || it != PlaybackSource.OFFICIAL) }) return@async
                 val query = Comments.buildSearchQuery(EpisodeMatcher.extract(commentSearchQuery(searchEpisode.series, searchEpisode.number)), 0).first
-                val firstSearch = attempt(trace) { videoSearch(query) }
+                val firstSearch = attemptSource { videoSearch(query) }
                 var completeSearch = firstSearch != null
                 var videos = firstSearch.orEmpty()
                 val wanted = setOf(PlaybackSource.DANIME, PlaybackSource.CHAPTER, PlaybackSource.COMMENT_ONLY, PlaybackSource.VIDEO).filter { enabled(it) }
                 val found = matchingPlaybackVideos(searchEpisode, videos, duration).map { it.first }.toSet()
                 if (wanted.any { it !in found }) {
-                    val secondSearch = attempt(trace) { videoSearch(searchEpisode.series) }
+                    val secondSearch = attemptSource { videoSearch(searchEpisode.series) }
                     completeSearch = completeSearch && secondSearch != null
                     videos = (videos + secondSearch.orEmpty()).distinctBy { it.id }
                 }
@@ -217,7 +221,7 @@ class PlaybackSourceRepository(
                             return@async
                         }
                     }
-                    permits.withPermit { attempt(trace) {
+                    permits.withPermit { attemptSource {
                         var fromArchive = true
                         val parts = items.map { item ->
                             val archived = if (refresh) null else official.store.readSource(item.id)?.takeIf { it.satisfiesCommentTarget(amount, maxComments) }
@@ -230,8 +234,8 @@ class PlaybackSourceRepository(
                     } }
                 } }.awaitAll()
             }
-            val jikkyoJob = async { if (enabled(PlaybackSource.JIKKYO)) attempt(trace) { progress("${PlaybackSource.JIKKYO.label}：コメントを取得中", 0, 0); val fetched = jikkyo(searchEpisode); if (throttle && fetched.isEmpty()) missing.record(missingKey, PlaybackSource.JIKKYO); fetched.forEach { publish(it) } } }
-            val liveJob = async { if (enabled(PlaybackSource.LIVE_ARCHIVE)) attempt(trace) { progress("${PlaybackSource.LIVE_ARCHIVE.label}：コメントを取得中", 0, 0); val fetched = nicolog(searchEpisode); if (throttle && (fetched == null || fetched.comments.isEmpty())) missing.record(missingKey, PlaybackSource.LIVE_ARCHIVE); publish(fetched) } }
+            val jikkyoJob = async { if (enabled(PlaybackSource.JIKKYO)) attemptSource { progress("${PlaybackSource.JIKKYO.label}：コメントを取得中", 0, 0); val fetched = jikkyo(searchEpisode); if (throttle && fetched.isEmpty()) missing.record(missingKey, PlaybackSource.JIKKYO); fetched.forEach { publish(it) } } }
+            val liveJob = async { if (enabled(PlaybackSource.LIVE_ARCHIVE)) attemptSource { progress("${PlaybackSource.LIVE_ARCHIVE.label}：コメントを取得中", 0, 0); val fetched = nicolog(searchEpisode); if (throttle && (fetched == null || fetched.comments.isEmpty())) missing.record(missingKey, PlaybackSource.LIVE_ARCHIVE); publish(fetched) } }
             try { awaitAll(officialJob, videoJob, jikkyoJob, liveJob) }
             catch (e: TrafficLimitReached) {
                 listOf(officialJob, videoJob, jikkyoJob, liveJob).forEach { it.cancel() }
@@ -241,6 +245,7 @@ class PlaybackSourceRepository(
             }
             if ((offlineSave || official.store.isAutomaticCache) && slots.isNotEmpty() && (!official.store.isAutomaticCache || slots.values.any { !it.fromArchive })) official.store.saveSources(episode, limitCommentSlots(slots.values.toList(), maxComments), selected, maxComments = maxComments)
             val result = synchronized()
+            if (result.comments.isEmpty() && slots.isEmpty()) (failures.firstOrNull { it !is MatchUnavailable } ?: failures.firstOrNull())?.let { throw it }
             if (result.comments.isEmpty()) throw MatchUnavailable(if (slots.isNotEmpty()) "同期に必要な情報がありません。取得元の同期設定を確認してください" else "一致するコメントがありません。取得元・作品名・話数を確認してください")
             progress("取得完了", result.comments.size, result.comments.size)
             result

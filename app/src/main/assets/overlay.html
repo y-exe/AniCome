@@ -8,6 +8,7 @@ canvas{display:block;position:absolute;left:0;top:50%;width:100%;height:auto;asp
 @media(orientation:landscape){
 #commentViewport{inset:auto;left:50%;top:50%;width:min(100vw,177.77777778vh);aspect-ratio:16/9;transform:translate(-50%,-50%)}
 canvas{left:0;top:50%!important;bottom:auto!important;width:100%;transform:translateY(-50%)!important}
+html[data-video-viewport] #commentViewport{left:var(--video-left);top:var(--video-top);width:var(--video-width);height:var(--video-height);aspect-ratio:auto;transform:none}
 }
 </style>
 </head><body><div id="commentViewport"><canvas id="comments" width="1920" height="1080"></canvas></div>

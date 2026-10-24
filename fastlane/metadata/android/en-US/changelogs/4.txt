@@ -1,0 +1,1 @@
+Improved anime search, channel matching and artwork recovery. Improved landscape clipping, per-app positioning and persistent preview comment counts.

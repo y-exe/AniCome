@@ -13,7 +13,8 @@ class DefaultsAndSearchTest {
     @After fun cleanup() { Dispatchers.resetMain() }
     @Test fun freshSettingsUseTheRequestedDefaultsButStoredValuesAreKept() {
         val p = mutablePreferencesOf(); val profile = CommentDisplayProfile.read(p)
-        assertEquals(14f, profile.size); assertEquals(.75f, profile.opacity); assertEquals(.7f, profile.speed)
+        assertEquals(15f, profile.size); assertEquals(.75f, profile.opacity); assertEquals(.65f, profile.speed)
+        assertTrue(profile.countMode); assertEquals(7000, profile.countLimit)
         assertEquals(5, profile.amount); assertEquals(60, profile.fps); assertEquals("balanced", profile.renderMode)
         val advanced = AdvancedSettings.from(SettingsSnapshot(p))
         assertEquals(DefaultCommentSources, advanced.sourceTargets)
@@ -35,6 +36,16 @@ class DefaultsAndSearchTest {
         val p = mutablePreferencesOf(); custom.write(p); assertEquals(custom, CommentDisplayProfile.read(p))
         val malformed = org.json.JSONObject(custom.json()).put("customY", "NaN").toString()
         assertEquals(1f, CommentDisplayProfile.parse(malformed)!!.customY)
+    }
+    @Test fun switchingPositionProfilesPreservesSharedCommentSettings() {
+        val p = mutablePreferencesOf()
+        val shared = CommentDisplayProfile(size = 22f, speed = 1.2f, opacity = .9f, fps = 120, countLimit = 12345)
+        shared.write(p)
+        val oldProfile = CommentDisplayProfile(size = 6f, speed = .3f, opacity = .2f, countLimit = 100, position = "custom", customY = .23f)
+        oldProfile.writePosition(p)
+        assertEquals(shared.copy(position = "custom", customY = .23f), CommentDisplayProfile.read(p))
+        defaultServiceProfile(StreamingService.ABEMA).writePosition(p)
+        assertEquals(shared.copy(position = "top"), CommentDisplayProfile.read(p))
     }
     @Test fun selectedSaveSourcesSurviveReopeningAndRecreatingTheScreen() = runTest {
         val settings = SettingsRepository(MemoryPreferences(), backgroundScope)

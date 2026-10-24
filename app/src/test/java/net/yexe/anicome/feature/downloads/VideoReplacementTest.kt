@@ -20,7 +20,10 @@ class VideoReplacementTest {
             store.saveSources(episode, listOf(PlaybackCommentSlot("so980003", "作品 第1話", PlaybackSource.DANIME, listOf(artist))))
             val selected = Candidate("so980002", "作品 第1話", channelId = 10)
             val repo = CommentRepository(store, load = { _, _ -> listOf(Comment(1000, "new")) })
-            VideoReplacementRepository(repo, metadata = { selected }).replace(store.read(episode)!!.info, selected, episode, "")
+            val remembered = mutableListOf<Pair<Episode, Candidate>>()
+            VideoReplacementRepository(repo, metadata = { selected }, remembered = { target, candidate -> remembered += target to candidate })
+                .replace(store.read(episode)!!.info, selected, episode, "")
+            assertEquals(listOf(episode to selected), remembered)
             val result = store.read(episode)!!
             assertEquals(selected.id, result.info.sourceId)
             assertEquals(listOf("new"), result.comments.map { it.body })

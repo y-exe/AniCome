@@ -112,7 +112,7 @@ class LibraryAcquisitionTest {
         val series = repo.load(2648350)
         assertEquals((1..12).toList(), series.numbers)
         assertTrue(series.videos.all { it.channelId == 2648350L && it.title.contains("2丁目") })
-        assertEquals("so40277014", repo.episode(2648350, 1).id)
+        assertEquals("1649138886", repo.episode(2648350, 1).id)
         val state = SaveCommentState(query = series.title, work = AnimeInfo(2648350, series.title, "", "", null, null, 12, emptyList(), "channel"), allEpisodes = true, channel = series)
         assertEquals((1..12).toList(), state.episodesToSave().map { it.number })
     }

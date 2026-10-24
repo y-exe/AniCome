@@ -41,7 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
         StudioRow(modifier = Modifier.motionClickable(enabled = matches && !state.saving) { choose(candidate) },
             headlineContent = { AppText(candidate.title, localize = false) },
             supportingContent = { Column { if (candidate.ownerName.isNotBlank()) AppText(candidate.ownerName, localize = false); if (!matches) AppText("期・話数が一致しません", color = MaterialTheme.colorScheme.error) } },
-            leadingContent = { AnimeArtwork(null, Modifier.size(64.dp, 36.dp), candidate.title, imageOverride = candidate.thumbnailUrl) },
+            leadingContent = { EpisodeArtwork(candidate.id, candidate.thumbnailUrl, Modifier.size(64.dp, 36.dp), candidate.title) },
             trailingContent = { RadioButton(state.selected?.id == candidate.id, { choose(candidate) }, enabled = matches && !state.saving) })
     } }
 }

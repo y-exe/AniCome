@@ -8,9 +8,9 @@ fun reservationEpisode(tags: Set<String>): Episode? {
 }
 fun reservationCatalog(tags: Set<String>, episode: Episode): AnimeInfo? {
     val parts = tags.firstOrNull { it.startsWith("catalog:") }?.split(':') ?: return null
-    if (parts.size != 5 || parts[1] !in setOf("jikan", "kitsu", "anilist", "channel")) return null
+    if (parts.size != 5 || parts[1] !in setOf("jikan", "kitsu", "anilist", "channel", "bangumi-data")) return null
     val id = parts[2].toIntOrNull()?.takeIf { it > 0 } ?: return null
-    return AnimeInfo(id, episode.series, tags.firstOrNull { it.startsWith("artwork:") }?.removePrefix("artwork:").orEmpty(), "", null, parts[3].toIntOrNull()?.takeIf { it > 0 }, parts[4].toIntOrNull()?.takeIf { it > 0 }, emptyList(), parts[1])
+    return AnimeInfo(id, episode.series, tags.firstOrNull { it.startsWith("artwork:") }?.removePrefix("artwork:").orEmpty(), "", null, parts[3].toIntOrNull()?.takeIf { it > 0 }, parts[4].toIntOrNull()?.takeIf { it > 0 }, emptyList(), parts[1], tags.firstOrNull { it.startsWith("catalogChannel:") }?.removePrefix("catalogChannel:")?.let(::niconicoChannelName))
 }
 
 fun reservationReview(tags: Set<String>): SaveEpisodeReview? {

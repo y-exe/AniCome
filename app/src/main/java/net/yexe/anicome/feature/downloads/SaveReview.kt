@@ -29,9 +29,11 @@ fun animeWorkSummaryText(work: AnimeInfo) = animeWorkSummary(work).split(" · ")
 class SaveReviewRepository(private val resolve: suspend (AnimeInfo, Int) -> ResolvedEpisodeMetadata? = { _, _ -> null },
     private val candidates: suspend (Episode, String) -> List<Candidate> = { _, _ -> emptyList() },
     private val channelEpisode: suspend (Long, Int) -> Candidate? = { _, _ -> null },
-    private val storage: suspend () -> SaveSpace = { SaveSpace() }) {
+    private val storage: suspend () -> SaveSpace = { SaveSpace() },
+    private val officialChannel: suspend (AnimeInfo) -> Long? = { null }) {
     suspend fun prepare(work: AnimeInfo, episodes: List<Episode>, sources: Set<PlaybackSource>, channel: Long?, amount: Int,
         progress: (Int, Int) -> Unit): SaveReview = withContext(Dispatchers.IO) { coroutineScope {
+        val automaticChannel = if (channel == null && PlaybackSource.OFFICIAL in sources) officialChannel(work) else null
         val permits = Semaphore(3)
         val count = java.util.concurrent.atomic.AtomicInteger()
         val rows = episodes.map { episode -> async { permits.withPermit {
@@ -41,10 +43,16 @@ class SaveReviewRepository(private val resolve: suspend (AnimeInfo, Int) -> Reso
                 catch (e: CancellationException) { throw e } catch (limit: TrafficLimitReached) { throw limit } catch (_: Exception) { issue = "各話情報を確認できませんでした"; null } else null
             val search = metadata?.episode ?: episode
             val subtitle = metadata?.title.orEmpty()
+            val resolvedChannel = channel ?: automaticChannel?.takeIf { metadata != null || animeWorkIdentity(work.title).cour == 1 }
             val found = if (PlaybackSource.OFFICIAL !in sources) emptyList() else try {
-                if (channel != null) listOfNotNull(channelEpisode(channel, episode.number)) else candidates(search, subtitle)
+                if (channel != null) listOfNotNull(channelEpisode(channel, episode.number))
+                else {
+                    val registered = if (resolvedChannel != null) try { listOfNotNull(channelEpisode(resolvedChannel, search.number)) }
+                        catch (e: CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e } catch (_: Exception) { emptyList() } else emptyList()
+                    if (registered.isNotEmpty()) registered else candidates(search, subtitle)
+                }
             } catch (e: CancellationException) { throw e } catch (limit: TrafficLimitReached) { throw limit } catch (_: Exception) { issue = "通信に失敗しました。再確認してください"; emptyList() }
-            val accepted = found.filter { it.isDownloadOfficial() && (if (channel != null) it.channelId == channel else savedEpisodeMatches(search, it, subtitle)) }
+            val accepted = found.filter { it.isDownloadOfficial() && (if (channel != null) it.channelId == channel else (it.channelId == resolvedChannel && resolvedChannel != null && EpisodeMatcher.extract(it.title).episode?.number == search.number) || savedEpisodeMatches(search, it, subtitle)) }
                 .sortedByDescending { it.commentCount }
             val candidate = accepted.firstOrNull()
             if (PlaybackSource.OFFICIAL in sources && candidate == null && issue.isBlank()) issue = if (found.isNotEmpty()) "期・話数が一致する公式動画がありません" else "公式動画が見つかりませんでした"

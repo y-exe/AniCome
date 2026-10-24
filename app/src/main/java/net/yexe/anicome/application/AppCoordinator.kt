@@ -22,7 +22,8 @@ class AppCoordinator(
     private val dao: SavedEpisodeDao? = null,
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     val playbackSources: PlaybackSourceRepository? = null,
-    private val history: CommentHistoryRepository? = null
+    private val history: CommentHistoryRepository? = null,
+    private val officialEpisodes: OfficialEpisodeRepository? = null
 ) {
     private val appContext get() = requireNotNull(context)
     var convenience: ConvenienceRepository? = null
@@ -37,8 +38,8 @@ class AppCoordinator(
     val completedFetches = MutableSharedFlow<FetchCompletion>(extraBufferCapacity = 4)
     val auto = MutableStateFlow(true)
     val commentAmount = MutableStateFlow(5)
-    val commentCountMode = MutableStateFlow(false)
-    val commentCountLimit = MutableStateFlow(5000)
+    val commentCountMode = MutableStateFlow(true)
+    val commentCountLimit = MutableStateFlow(7000)
     val effectiveCommentLimit get() = if (commentCountMode.value) commentCountLimit.value else 0
     val niconicoLinked = MutableStateFlow(false)
     val watchDownloads = MutableStateFlow(false)
@@ -73,12 +74,12 @@ class AppCoordinator(
         dao?.let { source -> scope.launch { source.observe().collect { library.value = it.map(SavedEpisodeEntity::toEpisode) } } }
         storageLimitMb.value = preferences.getLong("storageLimitMb", 0L).coerceAtLeast(0L)
         setupCompleted.value = preferences.getBoolean("setupCompleted", false)
-        Session.size.value = preferences.getFloat("commentSize", 14f).coerceIn(5f, 25f)
+        Session.size.value = preferences.getFloat("commentSize", 15f).coerceIn(5f, 25f)
         Session.overlayRequested.value = preferences.getBoolean("overlayEnabled", true)
         auto.value = preferences.getBoolean("auto", true)
         commentAmount.value = preferences.getInt("commentAmount", 5).coerceAtLeast(1)
-        commentCountMode.value = preferences.getBoolean("commentCountMode", false)
-        commentCountLimit.value = preferences.getInt("commentCountLimit", 5000).coerceAtLeast(1)
+        commentCountMode.value = preferences.getBoolean("commentCountMode", true)
+        commentCountLimit.value = preferences.getInt("commentCountLimit", 7000).coerceAtLeast(1)
         niconicoLinked.value = NiconicoLogin.isLinked()
         NiconicoLogin.publishProfile()
         if (niconicoLinked.value) completeInitialLogin()
@@ -92,7 +93,7 @@ class AppCoordinator(
             ?.let { name -> StreamingService.displayOrder.firstOrNull { it.name == name } } ?: StreamingService.NETFLIX
         if (preferences.getString("activeService", null) == StreamingService.FOD.name) settings?.putString("activeService", activeService.value.name)
         Session.opacity.value = preferences.getFloat("opacity", .75f).coerceIn(.2f, 1f)
-        Session.speedScale.value = preferences.getFloat("speedScale", .7f).coerceIn(.25f, 1.5f)
+        Session.speedScale.value = preferences.getFloat("speedScale", .65f).coerceIn(.25f, 1.5f)
         Session.displayDensity.value = 1f
         Session.fps.value = preferences.getInt("fps", 60).coerceIn(15, 144)
         Session.colorStyle.value = preferences.getString("colorStyle", "original") ?: "original"
@@ -141,12 +142,13 @@ class AppCoordinator(
                                 }
                                 return@collectLatest
                             }
+                            val searchEpisode = officialEpisodes?.lookupEpisode(episode) ?: episode
                             status.value = if (effectiveCommentLimit > 0) "${episode.label} のコメントを最大${effectiveCommentLimit}件で自動取得中…" else if (amount > Comments.availableAmount(amount)) {
                                 "${episode.label} を1倍で自動取得中…（高倍率にはニコニコログイン連携が必要です）"
                             } else "${episode.label} のコメントを${amount}倍で自動取得中…"
                             convenience?.selectedCandidate(episode)?.takeUnless { library.value.any { it.matchesPlaybackEpisode(episode) && it.sources.contains(',') } }?.let { remembered -> playbackSources?.manual(episode, remembered, amount, effectiveCommentLimit) { label, current, target -> fetchProgress.value = FetchProgress(label, current, target) } }
                                 ?: playbackSources?.obtain(episode, commentDuration / 1000, playback.searchTitle, amount, Diagnostics::trace,
-                                progress = { label, current, target -> fetchProgress.value = FetchProgress(label, current, target) }, maxComments = effectiveCommentLimit, onPartial = { update ->
+                                progress = { label, current, target -> fetchProgress.value = FetchProgress(label, current, target) }, searchEpisode = searchEpisode, maxComments = effectiveCommentLimit, onPartial = { update ->
                                     if (Session.playback.value.key == playback.key && !(Session.commentBinding.value == CommentBinding.MANUAL && Session.manualCommentKey.value == playback.key)) {
                                         val partial = continuePlaybackComments(retainedSlots(), update, Session.commentSyncReports.value).limited(effectiveCommentLimit)
                                         if (Session.matchedKey != playback.key) Session.offset.value = 0
@@ -161,7 +163,7 @@ class AppCoordinator(
                                         Session.commentBinding.value = CommentBinding.AUTO
                                     }
                                 })
-                                ?: repository.obtain(episode, duration = commentDuration / 1000, searchTitle = playback.searchTitle, amount = amount, maxComments = effectiveCommentLimit, trace = Diagnostics::trace,
+                                ?: repository.obtain(episode, duration = commentDuration / 1000, searchTitle = playback.searchTitle, sourceEpisode = searchEpisode, amount = amount, maxComments = effectiveCommentLimit, trace = Diagnostics::trace,
                                     progress = { label, current, target -> fetchProgress.value = FetchProgress(label, current, target) }).let { PlaybackComments(listOf(PlaybackCommentSlot(it.info.sourceId, it.info.sourceTitle, PlaybackSource.OFFICIAL, it.comments, it.fromArchive))) }
                         }
                         ensureActive()
@@ -185,8 +187,8 @@ class AppCoordinator(
                     } catch (e: CancellationException) { throw e }
                     catch (e: MatchUnavailable) { status.value = e.message.orEmpty() }
                     catch (e: Exception) {
-                        status.value = "取得失敗: ${e.message?.take(220) ?: e.javaClass.simpleName}"
-                        if (e is java.io.IOException && e !is TrafficLimitReached) DownloadWorker.enqueue(appContext, episode, "playback")
+                        status.value = "${acquisitionFailure(e).label}: ${e.message?.take(220) ?: e.javaClass.simpleName}"
+                        if (e is java.io.IOException && acquisitionFailure(e) == AcquisitionFailure.NETWORK) DownloadWorker.enqueue(appContext, episode, "playback")
                     } finally { busy.value = false }
                 }
         }
@@ -366,9 +368,9 @@ class AppCoordinator(
     fun delete(episode: Episode) = delete(listOf(episode))
     suspend fun reloadPortableSettings() {
         val p = settings?.load() ?: return
-        setCommentSize(p.getFloat("commentSize", 14f)); setOpacity(p.getFloat("opacity", .75f)); setSpeedScale(p.getFloat("speedScale", .7f)); setFps(p.getInt("fps", 60))
+        setCommentSize(p.getFloat("commentSize", 15f)); setOpacity(p.getFloat("opacity", .75f)); setSpeedScale(p.getFloat("speedScale", .65f)); setFps(p.getInt("fps", 60))
         setColorStyle(p.getString("colorStyle", "original")!!); setFontStyle(p.getString("fontStyle", "default")!!); setNgWords(p.getString("ngWords", "")!!)
-        setCommentAmount(p.getInt("commentAmount", 5)); setCommentCountMode(p.getBoolean("commentCountMode", false)); setCommentCountLimit(p.getInt("commentCountLimit", 5000)); setWifiOnly(p.getBoolean("wifiOnly", true)); setBatchLimit(p.getInt("batchLimit", 12)); setLanguage(p.getString("language", "system")!!)
+        setCommentAmount(p.getInt("commentAmount", 5)); setCommentCountMode(p.getBoolean("commentCountMode", true)); setCommentCountLimit(p.getInt("commentCountLimit", 7000)); setWifiOnly(p.getBoolean("wifiOnly", true)); setBatchLimit(p.getInt("batchLimit", 12)); setLanguage(p.getString("language", "system")!!)
         setThemeMode(p.getString("themeMode", "dark")!!); setStorageLimitMb(p.getLong("storageLimitMb", 0L).coerceAtLeast(0))
     }
 }

@@ -17,6 +17,9 @@ class AcquisitionFailureTest {
         assertEquals(AcquisitionFailure.UPCOMING, acquisitionFailure(OfficialMatchUnavailable("none"), java.time.Year.now().value + 1))
         assertEquals(AcquisitionFailure.NOT_FOUND, acquisitionFailure(OfficialMatchUnavailable("none"), java.time.Year.now().value))
     }
+    @Test fun visibleErrorLabelsKeepTheTypedCauseAcrossTheUiBoundary() {
+        AcquisitionFailure.entries.forEach { failure -> assertEquals(failure, acquisitionFailure("${failure.label}: details")) }
+    }
     @Test fun persistedFailuresKeepTheOriginalMessageAndRecommendedDestination() {
         val output = acquisitionFailureOutput(ApiHttpException(403))
         assertEquals("ACCESS", output.getString("failureKind"))

@@ -20,19 +20,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 val LocalConvenience = staticCompositionLocalOf<ConvenienceViewModel?> { null }
 
-@Composable fun CommentDisplayExtras(model: ConvenienceViewModel?) {
-    if (model == null) return
-    val o by model.options.collectAsStateWithLifecycle()
-    PreferenceSection("描画の負荷")
-ReferenceGroup {
-    listOf("quality" to "品質優先", "balanced" to "バランス", "battery" to "省電力").forEach { (key, title) ->
-        PreferenceChoice(title, o.renderMode == key, { model.renderMode(key) }, when (key) { "quality" -> "設定したFPSで表示"; "battery" -> "最大30fps・通常コメントを間引く"; else -> "最大60fps" })
-    }
-}
-
-    PreferenceHint("AA・固定コメントは間引きません")
-}
-
 @Composable fun CommentSelectionSettings(model: ConvenienceViewModel?) {
     if (model == null) return
     val o by model.options.collectAsStateWithLifecycle()
@@ -210,7 +197,7 @@ fun moveHomeSection(sections: List<String>, section: String, direction: Int): Li
 @Composable fun ErrorActions(status: String, retry: () -> Unit, manual: () -> Unit, settings: (String) -> Unit) {
     val failure = acquisitionFailure(status)
     val target = failure.settingsPage.orEmpty()
-    if (listOf("失敗", "見つかりません", "ありません", "特定できません", "HTTP", "timeout", "Unable").any { status.contains(it, true) }) {
+    if (AcquisitionFailure.entries.any { status.startsWith(it.label + ":") } || listOf("失敗", "見つかりません", "ありません", "特定できません", "HTTP", "timeout", "Unable").any { status.contains(it, true) }) {
         AppText(failure.explanation, style = MaterialTheme.typography.bodyMedium)
         FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(retry) { AppText("再試行") }

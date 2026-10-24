@@ -28,7 +28,8 @@ class CommentRepository(
     private val snapshotLoader: suspend (String, JSONObject?, Int, String, String) -> List<Candidate> = { query, filter, limit, sort, targets -> Comments.searchSnapshot(query, filter, limit, sort, targets) },
     private val reuse: CommentStore? = null,
     private val onSearch: suspend (String, Int, Episode?) -> Unit = { _, _, _ -> },
-    private val countLoad: suspend (String, Int, Int, (Int, Int) -> Unit) -> List<Comment> = Comments::loadToCount
+    private val countLoad: suspend (String, Int, Int, (Int, Int) -> Unit) -> List<Comment> = Comments::loadToCount,
+    private val officialLookup: suspend (Episode) -> List<Candidate> = { emptyList() }
 ) {
     private val permits = kotlinx.coroutines.sync.Semaphore(3)
     private val episodeLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
@@ -37,7 +38,7 @@ class CommentRepository(
     fun clearMissing() { missing.clear(); searchCache.entries.removeIf { it.value.second.isEmpty() } }
     private val seriesCache = java.util.concurrent.ConcurrentHashMap<String, List<Candidate>>()
 
-    fun forPlayback(cache: CommentStore) = CommentRepository(cache, search, load, detailedLoad, snapshotLoader, onSearch = onSearch, countLoad = countLoad)
+    fun forPlayback(cache: CommentStore) = CommentRepository(cache, search, load, detailedLoad, snapshotLoader, onSearch = onSearch, countLoad = countLoad, officialLookup = officialLookup)
     private fun archivedSource(id: String) = listOfNotNull(store.readSource(id), reuse?.readSource(id)).maxWithOrNull(compareBy<SavedComments> { it.info.amount }.thenBy { it.comments.size })
     private fun promoteJson(text: String, episode: Episode, selected: Set<PlaybackSource>) {
         val root = store.validateImport(text)
@@ -95,6 +96,10 @@ class CommentRepository(
             (if (reuse != null) store.read(episode)?.copy(fromArchive = true) else null) ?: it
         } }
 
+        if (source == null && requiredChannelId == null) {
+            val registered = registeredOfficial(episode).filter(accept)
+            if (registered.isNotEmpty()) return@withLock fetchAndSave(episode, registered, availableAmount, trace, progress, accept, strictMatch, maxComments)
+        }
         val missingKey = "${lookup.key}:$duration:$searchTitle:$episodeTitle:$strictMatch:$requiredChannelId"
         if (forceSearch) clearMissing()
         if (source == null && !forceSearch && missing.blocked(missingKey, PlaybackSource.OFFICIAL)) throw OfficialMatchUnavailable("${lookup.label}：全7段階の検索を試行しましたが一致する動画が見つかりませんでした。作品名や話数をご確認ください")
@@ -395,8 +400,14 @@ class CommentRepository(
 
     suspend fun searchCandidates(query: String, episode: Episode? = null): List<Candidate> = trackedSearch(query, episode, onSearch) { search(query.trim()) }
 
+    private suspend fun registeredOfficial(episode: Episode): List<Candidate> = try {
+        officialLookup(episode).filter { it.isDownloadOfficial() && EpisodeMatcher.extract(it.title).episode != null }
+    } catch (e: CancellationException) { throw e } catch (e: TrafficLimitReached) { throw e } catch (_: Exception) { emptyList() }
+
     suspend fun searchEpisodeCandidates(series: String, number: Int, subtitle: String = ""): List<Candidate> {
         val episode = Episode(series, number)
+        val registered = registeredOfficial(episode)
+        if (registered.isNotEmpty()) return registered
         val parsed = EpisodeMatcher.extract(commentSearchQuery(series, number))
         val query = Comments.buildSearchQuery(parsed, 0).first
         suspend fun safeSearch(value: String): Result<List<Candidate>> = try { Result.success(searchCandidates(value, episode)) }

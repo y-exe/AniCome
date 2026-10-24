@@ -258,7 +258,7 @@ import kotlinx.coroutines.delay
             AppText("${saved.count}件 · ${saved.amount}倍", style = MaterialTheme.typography.bodySmall)
             AppText(saved.sources.split(",").mapNotNull { name -> PlaybackSource.entries.find { it.name == name }?.label?.let { uiText(it) } }.joinToString(" · "), localize = false, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
         } },
-        leadingContent = { AnimeArtwork(null, Modifier.width(96.dp).height(54.dp), saved.sourceTitle, imageOverride = saved.thumbnailUrl) },
+        leadingContent = { EpisodeArtwork(saved.sourceId, saved.thumbnailUrl, Modifier.width(96.dp).height(54.dp), saved.sourceTitle) },
         trailingContent = { StudioIconButton(actions ?: remove) { AppIcon(if (actions == null) Icons.Filled.Delete else Icons.Filled.MoreVert, if (actions == null) "第${number}話を削除" else "話の操作") } },
         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
     )
@@ -298,7 +298,7 @@ import kotlinx.coroutines.delay
     }) {
         OutlinedTextField(state.query, query, Modifier.fillMaxWidth(), label = { AppText("作品名") }, singleLine = true, readOnly = state.saving,
             visualTransformation = rememberRoundedInput(),
-            leadingIcon = state.selected?.let { work -> { Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { AnimeArtwork(work, Modifier.size(24.dp, 36.dp).clip(RoundedCornerShape(4.dp)), work.title) } } },
+            leadingIcon = state.selected?.let { work -> { Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { CatalogArtwork(work, Modifier.size(24.dp, 36.dp).clip(RoundedCornerShape(4.dp)), work.title) } } },
             supportingText = { AppText(if (state.selected != null) state.total?.let { "選択済み · 全${it}話" } ?: uiText("選択済み") else "作品名を入力して候補を選んでください") })
         state.channel?.let { AppText("指定チャンネル：ch${it.id}", style = MaterialTheme.typography.bodyMedium) }
         if (state.loading) { StudioProgress(); AppText("作品を検索しています") }
@@ -306,7 +306,7 @@ import kotlinx.coroutines.delay
         if (state.searched && state.results.isEmpty()) AppText("候補がありません。別の作品名で検索してください。")
         state.results.take(6).forEach { work ->
             StudioRow(headlineContent = { AppText(work.title, localize = false) }, modifier = Modifier.motionClickable { choose(work) },
-                supportingContent = { AppText(animeWorkSummaryText(work)) }, leadingContent = { AnimeArtwork(work, Modifier.size(48.dp, 64.dp), work.title) })
+                supportingContent = { AppText(animeWorkSummaryText(work)) }, leadingContent = { CatalogArtwork(work, Modifier.size(48.dp, 64.dp), work.title) })
         }
         TextButton({ channelHelp = true }, enabled = !state.saving) { AppIcon(Icons.Filled.ErrorOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); AppText("うまく取得できない場合はこちら") }
         var choosingSources by rememberSaveable { mutableStateOf(false) }

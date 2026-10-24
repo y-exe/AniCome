@@ -77,7 +77,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                             val minutes = ((saved.savedAt + hours * 3_600_000L - now).coerceAtLeast(0L) + 59_999L) / 60_000L
                             AppText(if (minutes == 0L) "まもなく削除" else if (minutes >= 60L) "あと${(minutes + 59L) / 60L}時間で削除" else "あと${minutes}分で削除", style = MaterialTheme.typography.bodySmall)
                         } },
-                        leadingContent = { AnimeArtwork(null, Modifier.size(64.dp, 36.dp), saved.sourceTitle, imageOverride = saved.thumbnailUrl) },
+                        leadingContent = { EpisodeArtwork(saved.sourceId, saved.thumbnailUrl, Modifier.size(64.dp, 36.dp), saved.sourceTitle) },
                         trailingContent = { Row {
                             IconButton({ keeping = saved }) { AppIcon(Icons.Filled.SaveAlt, uiText("事前保存へ変更")) }
                             IconButton({ removing = saved.episode }) { AppIcon(Icons.Filled.Delete, uiText("削除")) }

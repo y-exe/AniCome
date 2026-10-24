@@ -17,11 +17,11 @@ data class ReservationSpec(val episode: Episode, val origin: String = "manual", 
         if (maxComments > 0) add("maxComments:$maxComments")
         if (estimatedBytes > 0) add("estimatedBytes:$estimatedBytes")
         channel?.let { add("channel:$it") }
-        catalog?.let { work -> add("catalog:${work.provider}:${work.id}:${work.year ?: 0}:${work.episodes ?: 0}"); if (work.imageUrl.isNotBlank()) add("artwork:${work.imageUrl}") }
+        catalog?.let { work -> add("catalog:${work.provider}:${work.id}:${work.year ?: 0}:${work.episodes ?: 0}"); if (work.imageUrl.isNotBlank()) add("artwork:${work.imageUrl}"); work.niconicoChannel?.let { add("catalogChannel:$it") } }
         reviewed?.let { add("reviewNumber:${it.searchEpisode.number}"); add("reviewSeries:${it.searchEpisode.series}"); add("reviewSubtitle:${it.subtitle}"); it.candidate?.let { candidate -> add("reviewVideo:${candidate.id}") } }
     }
     fun input() = workDataOf("series" to episode.series, "number" to episode.number, "origin" to origin,
-        "catalogId" to (catalog?.id ?: 0), "catalogProvider" to catalog?.provider.orEmpty(), "catalogYear" to (catalog?.year ?: 0), "catalogEpisodes" to (catalog?.episodes ?: 0),
+        "catalogChannel" to catalog?.niconicoChannel.orEmpty(), "catalogId" to (catalog?.id ?: 0), "catalogProvider" to catalog?.provider.orEmpty(), "catalogYear" to (catalog?.year ?: 0), "catalogEpisodes" to (catalog?.episodes ?: 0),
         "channelId" to (channel ?: 0L), "sources" to sources.map { it.name }.sorted().toTypedArray(), "reviewed" to (reviewed != null),
         "reviewVideo" to reviewed?.candidate?.id.orEmpty(), "reviewSeries" to reviewed?.searchEpisode?.series.orEmpty(), "reviewNumber" to (reviewed?.searchEpisode?.number ?: episode.number), "reviewSubtitle" to reviewed?.subtitle.orEmpty(), "amount" to amount, "estimatedBytes" to estimatedBytes, "maxComments" to maxComments)
     fun request(id: UUID, reservation: String) = OneTimeWorkRequestBuilder<DownloadWorker>().setId(id).setInputData(input())

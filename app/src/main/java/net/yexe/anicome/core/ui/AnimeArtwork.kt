@@ -18,19 +18,35 @@ import coil3.request.crossfade
 
 @Composable fun AnimeArtwork(
     info: AnimeInfo?, modifier: Modifier = Modifier, contentDescription: String? = null,
-    episode: Int? = null, imageOverride: String? = null
+    episode: Int? = null, imageOverride: String? = null, imageError: () -> Unit = {}
 ) {
-    val artworkUrl = imageOverride ?: info?.imageUrl
+    val artworkUrl = imageOverride?.takeIf(String::isNotBlank) ?: info?.imageUrl
     Surface(modifier.clip(RoundedCornerShape(6.dp)), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         if (artworkUrl.isNullOrBlank()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { AppIcon(Icons.Filled.Movie, contentDescription, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
             Box(Modifier.fillMaxSize()) {
-                AsyncImage(model = coil3.request.ImageRequest.Builder(LocalContext.current).data(artworkUrl).crossfade(true).build(), contentDescription = contentDescription, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                AsyncImage(model = coil3.request.ImageRequest.Builder(LocalContext.current).data(artworkUrl).crossfade(true).build(), contentDescription = contentDescription, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), onError = { imageError() })
                 if (episode != null) Surface(color = Color.Black.copy(alpha = .56f), shape = RoundedCornerShape(topEnd = 12.dp), modifier = Modifier.align(Alignment.BottomStart)) {
                     AppText("第${episode}話", Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
     }
+}
+
+@Composable fun EpisodeArtwork(sourceId: String, thumbnailUrl: String, modifier: Modifier, description: String? = null) {
+    val load = LocalVideoArtworkLoad.current
+    val id = niconicoVideoId(sourceId)
+    val resolved = id?.let { LocalVideoArtwork.current[it] }
+    androidx.compose.runtime.LaunchedEffect(id, thumbnailUrl) { if (id != null && thumbnailUrl.isBlank()) load(id, false) }
+    androidx.compose.runtime.key(resolved) {
+        AnimeArtwork(null, modifier, description, imageOverride = resolved?.takeIf(String::isNotBlank) ?: thumbnailUrl,
+            imageError = { if (id != null) load(id, true) })
+    }
+}
+
+@Composable fun CatalogArtwork(info: AnimeInfo, modifier: Modifier, description: String? = null) {
+    val supplement = if (info.imageUrl.isBlank()) rememberArtwork(info.title) else null
+    AnimeArtwork(info, modifier, description, imageOverride = info.imageUrl.takeIf(String::isNotBlank) ?: supplement?.imageUrl)
 }
